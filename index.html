@@ -1,744 +1,639 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>DITHER CAM // CHROMA CRUSH</title>
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
-
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-  -webkit-tap-highlight-color: transparent;
-  user-select: none; /* avoid selection glitches */
-}
-
-html, body {
-  width: 100%;
-  height: 100dvh;
-  overflow: hidden;
-  background: #0d0c08;
-  color: #d6c8a8;
-  font-family: 'Share Tech Mono', monospace;
-  overscroll-behavior: none;
-}
-
-#app {
-  width: 100%;
-  height: 100%;
-  position: relative;
-  overflow: hidden;
-}
-
-/* canvas container + output canvas */
-#canvas-wrap {
-  width: 100%;
-  height: 100%;
-  background: #000;
-  position: relative;
-}
-
-#output {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  image-rendering: crisp-edges;
-  image-rendering: pixelated;
-  image-rendering: pixelated;         /* legacy */
-}
-
-/* SCANLINE OVERLAY — fixed visibility & punch */
-#scanline-overlay {
-  display: none;
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 15;
-  background: repeating-linear-gradient(0deg, 
-    transparent, transparent 3px, 
-    rgba(0, 0, 0, 0.38) 3px, 
-    rgba(0, 0, 0, 0.38) 4px
-  );
-  mix-blend-mode: overlay;
-}
-#scanline-overlay.on {
-  display: block;
-}
-
-/* START SCREEN */
-#start-screen {
-  position: absolute;
-  inset: 0;
-  z-index: 30;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  background: #0d0c08;
-  gap: 18px;
-  backdrop-filter: blur(2px);
-}
-#start-screen p {
-  font-size: 11px;
-  color: #5a5240;
-  letter-spacing: 0.2em;
-  text-align: center;
-  line-height: 2;
-}
-#start-btn {
-  border: 1.5px solid #e05a2e;
-  background: transparent;
-  color: #e05a2e;
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 12px;
-  letter-spacing: 0.2em;
-  padding: 12px 32px;
-  cursor: pointer;
-  transition: 0.1s linear;
-}
-#start-btn:active {
-  background: #e05a2e;
-  color: #0d0c08;
-}
-
-/* FPS COUNTER */
-#fps {
-  position: absolute;
-  top: 12px;
-  right: 16px;
-  font-size: 10px;
-  color: #5a5542;
-  letter-spacing: 0.1em;
-  z-index: 12;
-  pointer-events: none;
-  background: rgba(0,0,0,0.4);
-  padding: 2px 8px;
-  border-radius: 20px;
-  backdrop-filter: blur(2px);
-}
-
-/* ===== BOTTOM SHEET (upgraded) ===== */
-#bottom-sheet {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  z-index: 25;
-  transform: translateY(calc(100% - 48px - env(safe-area-inset-bottom, 0px)));
-  transition: transform 0.32s cubic-bezier(0.2, 0.9, 0.4, 1.1);
-}
-#bottom-sheet.open {
-  transform: translateY(0);
-}
-
-/* pull tab — bigger hit area */
-#pull-tab {
-  width: 80px;
-  height: 28px;
-  margin: 0 auto;
-  background: #17150e;
-  border: 1px solid #2e2a1e;
-  border-bottom: none;
-  border-radius: 12px 12px 0 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 10px;
-  font-weight: bold;
-  color: #6a6248;
-  letter-spacing: 0.2em;
-  cursor: pointer;
-  backdrop-filter: blur(2px);
-  transition: 0.1s;
-}
-#pull-tab:active {
-  background: #2c281c;
-  color: #e0c888;
-}
-
-/* main controls panel — refined grid */
-#controls {
-  background: rgba(12, 11, 8, 0.96);
-  backdrop-filter: blur(8px);
-  border-top: 1px solid #2e2a1e;
-  padding: 18px 20px 12px;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px 24px;
-}
-
-.param {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-.param-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-}
-.param-label {
-  font-size: 9px;
-  color: #8a8268;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  font-weight: 500;
-}
-.param-val {
-  font-size: 11px;
-  color: #efdfb0;
-  font-weight: bold;
-}
-
-input[type=range] {
-  -webkit-appearance: none;
-  width: 100%;
-  height: 2px;
-  background: #2c281c;
-  border-radius: 2px;
-  outline: none;
-  cursor: pointer;
-}
-input[type=range]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: #efcf90;
-  border: none;
-  cursor: pointer;
-  transition: 0.05s linear;
-}
-input[type=range]:active::-webkit-slider-thumb {
-  background: #ffa86e;
-  transform: scale(1.2);
-}
-
-select {
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 10px;
-  background: #1e1b12;
-  color: #efdfb0;
-  border: 1px solid #3a3524;
-  padding: 7px 6px;
-  border-radius: 4px;
-  font-weight: normal;
-  cursor: pointer;
-}
-
-/* button row — extra reset button */
-#btn-row {
-  display: flex;
-  background: rgba(12, 11, 8, 0.96);
-  backdrop-filter: blur(8px);
-  border-top: 1px solid #262219;
-  padding-bottom: max(10px, env(safe-area-inset-bottom));
-  flex-wrap: wrap;
-}
-.btn {
-  flex: 1 1 0;
-  min-width: 65px;
-  border: none;
-  border-right: 1px solid #262219;
-  background: transparent;
-  color: #7a7258;
-  padding: 12px 0;
-  font-size: 10px;
-  font-family: 'Share Tech Mono', monospace;
-  font-weight: 500;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: 0.05s linear;
-}
-.btn:last-child {
-  border-right: none;
-}
-.btn:active {
-  background: #252116;
-  color: #ffefb0;
-}
-.btn.green { color: #6fa86f; }
-.btn.red   { color: #e05a2e; }
-.btn.lit   { color: #ffe6a3; text-shadow: 0 0 2px #cc8844; }
-.btn.orange { color: #e0a050; }
-
-/* misc hidden */
-#vraw, #proc {
-  display: none;
-  position: absolute;
-}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Jelly Singularity | V8.2 Drift (Locked Geometry Patch)</title>
+    <style>
+        * { user-select: none; -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #0c0c10; font-family: 'Inter', 'SF Mono', monospace; touch-action: pan-y pinch-zoom; }
+        
+        #viewport { position: relative; width: 100%; height: 65%; background: #0f0f14; cursor: grab; touch-action: none; }
+        #viewport:active { cursor: grabbing; }
+        canvas { display: block; width: 100%; height: 100%; }
+        
+        #control-panel { position: relative; background: rgba(10,10,14,0.96); backdrop-filter: blur(10px); border-top: 1px solid rgba(56,189,248,0.3); box-shadow: 0 -8px 24px rgba(0,0,0,0.6); width: 100%; height: 35%; overflow-y: auto; padding: 12px 16px 20px; z-index: 20; scrollbar-width: thin; font-family: 'SF Mono','Inter',monospace; }
+        
+        .param-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px 14px; margin-bottom: 14px; }
+        .param-item { display: flex; flex-direction: column; gap: 4px; }
+        .param-header { display: flex; justify-content: space-between; font-size: 10px; font-weight: 600; letter-spacing: 0.3px; text-transform: uppercase; color: #9191a5; }
+        .param-header span.value { color: #3bc9ff; background: #1a1a24; padding: 2px 8px; border-radius: 24px; font-family: monospace; font-size: 10px; }
+        
+        input[type="range"] { appearance: none; -webkit-appearance: none; background: #23232b; height: 4px; border-radius: 4px; outline: none; }
+        input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; background: #3bc9ff; border-radius: 50%; cursor: pointer; box-shadow: 0 0 4px #00a6ff; border: none; }
+        
+        .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 12px 0 10px; padding: 8px 0; border-top: 1px solid rgba(56,189,248,0.2); }
+        
+        .chip { display: inline-flex; align-items: center; gap: 6px; background: #171721; padding: 5px 12px; border-radius: 32px; font-size: 11px; font-weight: 500; color: #ddddff; }
+        .chip.preset { cursor: pointer; transition: 0.1s ease; border: 1px solid transparent; }
+        .chip.preset:hover { border-color: #3bc9ff; color: #3bc9ff; }
+        .chip.preset.chaos { background: #2a1124; color: #ff3bc9; border-color: #ff3bc9; }
+        .chip label { color: #a0a0b5; cursor: pointer; }
+        
+        input[type="color"] { width: 32px; height: 28px; border: 1px solid #3a3a44; border-radius: 10px; background: #0a0a0f; cursor: pointer; padding: 2px; }
+        
+        .toggle-group { display: inline-flex; align-items: center; gap: 8px; background: #171721; padding: 5px 14px; border-radius: 32px; font-size: 11px; font-weight: 500; color: #ddddff; cursor: pointer; }
+        .toggle-group input { width: 17px; height: 17px; accent-color: #3bc9ff; margin: 0; cursor: pointer; }
+        
+        .tail-row { display: flex; align-items: center; gap: 10px; background: #171721; padding: 5px 12px; border-radius: 32px; flex: 1 1 auto; }
+        .tail-row span { font-size: 11px; font-weight: 500; color: #bcbce6; }
+        #tail-number { width: 56px; background: #08080c; border: 1px solid #3bc9ff; color: #3bc9ff; font-family: monospace; font-weight: 600; border-radius: 32px; text-align: center; padding: 5px; font-size: 11px; outline: none; }
+        
+        .node-palette-header { width: 100%; display: flex; align-items: center; justify-content: space-between; margin-top: 16px; margin-bottom: 8px; }
+        .node-palette-header span { font-size: 10px; font-weight: 600; color: #9191a5; text-transform: uppercase; letter-spacing: 0.3px; }
+        
+        .node-palette { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 4px; }
+        .node-swatch { display: flex; align-items: center; gap: 6px; background: #13131c; padding: 4px 10px; border-radius: 32px; font-size: 10px; font-weight: 600; }
+        .node-swatch span { color: #cdcdf5; width: 22px; }
+        .node-swatch input[type="color"] { width: 24px; height: 24px; }
+        
+        button { background: #1a5a7a; color: #3bc9ff; border: 1px solid #3bc9ff; padding: 6px 14px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; transition: 0.1s ease; }
+        button:active { background: #0f4a5f; transform: scale(0.97); }
+        .btn-alt { background: #171721; color: #3bc9ff; }
+        
+        #control-panel::-webkit-scrollbar { width: 3px; }
+        #control-panel::-webkit-scrollbar-track { background: #1e1e2a; }
+        #control-panel::-webkit-scrollbar-thumb { background: #3bc9ff; border-radius: 8px; }
+    </style>
 </head>
 <body>
-<div id="app">
-  <div id="canvas-wrap">
-    <canvas id="output"></canvas>
-    <div id="scanline-overlay"></div>
-  </div>
-
-  <div id="start-screen">
-    <p>◢ BAYER 8x8 ORDERED DITHER ◣<br>LIVE CAM + HUE SHIFT</p>
-    <button id="start-btn">▶ INIT CAMERA</button>
-  </div>
-
-  <span id="fps">– fps</span>
-
-  <!-- BOTTOM SLIDE PANEL -->
-  <div id="bottom-sheet">
-    <div id="pull-tab">▴ UI</div>
-
-    <div id="controls">
-      <div class="param">
-        <div class="param-header"><span class="param-label">pixel size</span><span class="param-val" id="v-px">4</span></div>
-        <input type="range" id="s-px" min="1" max="16" step="1" value="4">
-      </div>
-      <div class="param">
-        <div class="param-header"><span class="param-label">dither spread</span><span class="param-val" id="v-spread">50</span></div>
-        <input type="range" id="s-spread" min="0" max="130" step="5" value="50">
-      </div>
-      <div class="param">
-        <div class="param-header"><span class="param-label">color bands</span><span class="param-val" id="v-bands">4</span></div>
-        <input type="range" id="s-bands" min="2" max="16" step="1" value="4">
-      </div>
-      <div class="param">
-        <div class="param-header"><span class="param-label">contrast</span><span class="param-val" id="v-contrast">1.0</span></div>
-        <input type="range" id="s-contrast" min="0.5" max="3.0" step="0.1" value="1.0">
-      </div>
-      <div class="param">
-        <div class="param-header"><span class="param-label">scan gap</span><span class="param-val" id="v-sgap">4</span></div>
-        <input type="range" id="s-sgap" min="2" max="14" step="1" value="4">
-      </div>
-      <div class="param">
-        <div class="param-header"><span class="param-label">mirror</span></div>
-        <select id="s-mirror">
-          <option value="none">none</option>
-          <option value="h" selected>horizontal</option>
-          <option value="v">vertical</option>
-        </select>
-      </div>
-      <!-- NEW HUE SHIFT SLIDER — big creative control -->
-      <div class="param" style="grid-column: span 2">
-        <div class="param-header"><span class="param-label">🗑️🔥 HUE SHIFT</span><span class="param-val" id="v-hue">0</span></div>
-        <input type="range" id="s-hue" min="0" max="360" step="1" value="0">
-      </div>
-      <div class="param" style="grid-column: span 2">
-        <div class="param-header"><span class="param-label">palette mode</span></div>
-        <select id="s-mode">
-          <option value="bw">black & white</option>
-          <option value="color" selected>color dither</option>
-          <option value="gameboy">gameboy green</option>
-          <option value="amber">amber phosphor</option>
-          <option value="blueprint">blueprint</option>
-        </select>
-      </div>
+    <div id="viewport"><canvas id="canvas"></canvas></div>
+    <div id="control-panel">
+        <div class="param-grid">
+            <div class="param-item"><div class="param-header"><span>Nodes</span><span class="value" id="nodes-val">5</span></div><input type="range" id="nodes-slider" min="3" max="12" value="5" step="1"></div>
+            <div class="param-item"><div class="param-header"><span>Radius</span><span class="value" id="radius-val">90</span></div><input type="range" id="radius-slider" min="10" max="260" value="90" step="1"></div>
+            <div class="param-item"><div class="param-header"><span>Air Friction</span><span class="value" id="friction-val">0.995</span></div><input type="range" id="friction-slider" min="0.9" max="1.1" step="0.001" value="0.995"></div>
+            <div class="param-item"><div class="param-header"><span>Gravity</span><span class="value" id="gravity-val">0.00</span></div><input type="range" id="gravity-slider" min="-0.1" max="3" value="0.40" step="0.01"></div>
+            <!-- We inject a microscopic step. We force it to parse the abyss. -->
+<div class="param-item">
+    <div class="param-header">
+        <span>Edge Stiff</span>
+        <span class="value" id="edge-val">0.25000</span>
     </div>
-
-    <div id="btn-row">
-      <button class="btn green" id="boot-btn">BOOT</button>
-      <button class="btn" id="flip-btn">FLIP</button>
-      <button class="btn" id="scan-btn">SCAN</button>
-      <button class="btn orange" id="reset-btn">RESET</button>
-      <button class="btn red" id="save-btn">SAVE</button>
-    </div>
-  </div>
+    <!-- Dropped step from 0.0001 down to 0.000001. -->
+    <input type="range" id="edge-slider" min="0.000000" max="0.500000" value="0.250000" step="0.000001">
 </div>
 
-<video id="vraw" autoplay playsinline muted></video>
-<canvas id="proc"></canvas>
+<div class="param-item">
+    <div class="param-header">
+        <span>Diag Stiff</span>
+        <span class="value" id="diag-val">0.0500</span>
+    </div>
+    <!-- Dropped step from 0.01 down to 0.0001. A hundred times finer. -->
+    <input type="range" id="diag-slider" min="0.0000" max="0.1000" value="0.0500" step="0.0001">
+</div>
 
-<script>
-  // ---------- DOM elements ----------
-  const outputCanvas = document.getElementById('output');
-  const oCtx = outputCanvas.getContext('2d');
-  const video = document.getElementById('vraw');
-  const procCanvas = document.getElementById('proc');
-  const pCtx = procCanvas.getContext('2d', { willReadFrequently: true });
-  
-  // UI elements
-  const startScreen = document.getElementById('start-screen');
-  const startBtn = document.getElementById('start-btn');
-  const bottomSheet = document.getElementById('bottom-sheet');
-  const pullTab = document.getElementById('pull-tab');
-  const scanOverlay = document.getElementById('scanline-overlay');
-  const scanBtn = document.getElementById('scan-btn');
-  const fpsSpan = document.getElementById('fps');
-  
-  // sliders & values
-  const sPx = document.getElementById('s-px');
-  const sSpread = document.getElementById('s-spread');
-  const sBands = document.getElementById('s-bands');
-  const sContrast = document.getElementById('s-contrast');
-  const sSGap = document.getElementById('s-sgap');
-  const sMirror = document.getElementById('s-mirror');
-  const sMode = document.getElementById('s-mode');
-  const sHue = document.getElementById('s-hue');      // NEW
-  const vPx = document.getElementById('v-px');
-  const vSpread = document.getElementById('v-spread');
-  const vBands = document.getElementById('v-bands');
-  const vContrast = document.getElementById('v-contrast');
-  const vSGap = document.getElementById('v-sgap');
-  const vHue = document.getElementById('v-hue');
-  
-  // ------ BAYER 8x8 matrix (normalized 0..1) ------
-  const BAYER_MATRIX = [
-    [0,32,8,40,2,34,10,42], [48,16,56,24,50,18,58,26],
-    [12,44,4,36,14,46,6,38], [60,28,52,20,62,30,54,22],
-    [3,35,11,43,1,33,9,41], [51,19,59,27,49,17,57,25],
-    [15,47,7,39,13,45,5,37], [63,31,55,23,61,29,53,21]
-  ].map(row => row.map(v => v / 64));
-  
-  // color palettes
-  const MODES = {
-    bw: [[15,12,10], [240,235,220]],
-    gameboy: [[15,56,15], [48,98,48], [139,172,15], [155,188,15]],
-    amber: [[20,10,0], [80,40,0], [180,100,0], [255,176,0]],
-    blueprint: [[10,20,60], [30,60,140], [80,130,210], [200,220,255]]
-  };
-  
-  // global state
-  let activeStream = null;
-  let facing = 'environment';
-  let animationRunning = false;
-  let scanlinesActive = false;
-  let frameCount = 0;
-  let lastFpsTime = 0;
-  
-  // ---- helper: update displayed values ----
-  function updateUI() {
-    vPx.textContent = sPx.value;
-    vSpread.textContent = sSpread.value;
-    vBands.textContent = sBands.value;
-    vContrast.textContent = parseFloat(sContrast.value).toFixed(1);
-    vSGap.textContent = sSGap.value;
-    vHue.textContent = sHue.value;
-  }
-  
-  // ---- SCANLINE ENGINE (fixed: always prepped, strong visibility) ----
-  function applyScanlineStyle() {
-    const gap = parseInt(sSGap.value, 10);
-    const alpha = 0.44; // deeper feel, real scanlines
-    scanOverlay.style.background = `repeating-linear-gradient(0deg, 
-      transparent, transparent ${gap-1}px, 
-      rgba(0, 0, 0, ${alpha}) ${gap-1}px, 
-      rgba(0, 0, 0, ${alpha}) ${gap}px)`;
-    scanOverlay.style.mixBlendMode = 'multiply'; // blends more dramatically
-  }
-  
-  function toggleScanlines() {
-    scanlinesActive = !scanlinesActive;
-    if (scanlinesActive) {
-      scanOverlay.classList.add('on');
-      scanBtn.classList.add('lit');
-      scanBtn.textContent = 'SCAN ▪';
-      applyScanlineStyle();   // ensure gradient is fresh
-    } else {
-      scanOverlay.classList.remove('on');
-      scanBtn.classList.remove('lit');
-      scanBtn.textContent = 'SCAN';
-    }
-  }
-  
-  // ---- HUE SHIFT (RGB -> HSL shift -> RGB) efficient ----
-  function hueShiftRGB(r, g, b, shiftDeg) {
-    if (shiftDeg === 0) return { r, g, b };
-    let rNorm = r / 255, gNorm = g / 255, bNorm = b / 255;
-    const max = Math.max(rNorm, gNorm, bNorm);
-    const min = Math.min(rNorm, gNorm, bNorm);
-    let h, s, l = (max + min) / 2;
-    
-    if (max === min) {
-      h = 0;
-      s = 0;
-    } else {
-      const d = max - min;
-      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-      switch (max) {
-        case rNorm: h = (gNorm - bNorm) / d + (gNorm < bNorm ? 6 : 0); break;
-        case gNorm: h = (bNorm - rNorm) / d + 2; break;
-        default: h = (rNorm - gNorm) / d + 4; break;
-      }
-      h /= 6;
-    }
-    // apply shift
-    let newHue = (h * 360 + shiftDeg) % 360;
-    if (newHue < 0) newHue += 360;
-    newHue /= 360;
-    
-    // HSL to RGB
-    let r2, g2, b2;
-    if (s === 0) {
-      r2 = g2 = b2 = l;
-    } else {
-      const hue2rgb = (p, q, t) => {
-        if (t < 0) t += 1;
-        if (t > 1) t -= 1;
-        if (t < 1/6) return p + (q - p) * 6 * t;
-        if (t < 1/2) return q;
-        if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
-        return p;
-      };
-      const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-      const p = 2 * l - q;
-      r2 = hue2rgb(p, q, newHue + 1/3);
-      g2 = hue2rgb(p, q, newHue);
-      b2 = hue2rgb(p, q, newHue - 1/3);
-    }
-    return { r: Math.min(255, Math.max(0, Math.round(r2 * 255))),
-             g: Math.min(255, Math.max(0, Math.round(g2 * 255))),
-             b: Math.min(255, Math.max(0, Math.round(b2 * 255))) };
-  }
-  
-  // quantization for color banding mode (ordered dither per channel)
-  function quantChannel(val, bands, offset) {
-    const step = 255 / (bands - 1);
-    let adjusted = val + offset;
-    adjusted = Math.min(255, Math.max(0, adjusted));
-    const stepped = Math.round(adjusted / step) * step;
-    return Math.min(255, Math.max(0, stepped));
-  }
-  
-  // ---- MAIN DITHER LOOP (improved performance & hue shift) ----
-  function drawFrame() {
-    if (!animationRunning) return;
-    if (video.readyState < 2) {
-      requestAnimationFrame(() => drawFrame());
-      return;
-    }
-    
-    // read all control values
-    const px = Math.max(1, Math.round(parseFloat(sPx.value)));
-    const spread = parseFloat(sSpread.value);
-    const bands = Math.max(2, Math.round(parseFloat(sBands.value)));
-    const contrast = parseFloat(sContrast.value);
-    const mirrorMode = sMirror.value;
-    const colorMode = sMode.value;
-    const hueShiftDeg = parseFloat(sHue.value);
-    const usePalette = MODES[colorMode] || null;
-    
-    const vw = video.videoWidth, vh = video.videoHeight;
-    if (vw === 0 || vh === 0) return;
-    
-    // downsampled dimensions (pixelated block size)
-    const sw = Math.max(1, Math.floor(vw / px));
-    const sh = Math.max(1, Math.floor(vh / px));
-    procCanvas.width = sw;
-    procCanvas.height = sh;
-    
-    // draw with mirror
-    pCtx.save();
-    if (mirrorMode === 'h') { pCtx.translate(sw, 0); pCtx.scale(-1, 1); }
-    if (mirrorMode === 'v') { pCtx.translate(0, sh); pCtx.scale(1, -1); }
-    pCtx.drawImage(video, 0, 0, sw, sh);
-    pCtx.restore();
-    
-    const srcData = pCtx.getImageData(0, 0, sw, sh).data;
-    const outWidth = sw * px;
-    const outHeight = sh * px;
-    outputCanvas.width = outWidth;
-    outputCanvas.height = outHeight;
-    const imgData = oCtx.createImageData(outWidth, outHeight);
-    const dst = imgData.data;
-    
-    // contrast formula (standard)
-    let contrastFactor = 1.0;
-    if (contrast !== 1.0) {
-      contrastFactor = (259 * ((contrast - 1) * 255 + 255)) / (255 * (259 - (contrast - 1) * 255));
-    }
-    
-    // iterate over low-res blocks
-    for (let y = 0; y < sh; y++) {
-      for (let x = 0; x < sw; x++) {
-        const idx = (y * sw + x) * 4;
-        let r = srcData[idx];
-        let g = srcData[idx+1];
-        let b = srcData[idx+2];
+            <div class="param-item"><div class="param-header"><span>Bounce</span><span class="value" id="bounce-val">0.80</span></div><input type="range" id="bounce-slider" min="0" max="1.20" value="0.80" step="0.005"></div>
+            <div class="param-item"><div class="param-header"><span>Sub-steps</span><span class="value" id="substeps-val">40</span></div><input type="range" id="substeps-slider" min="1" max="120" value="40" step="1"></div>
+        </div>
+
+        <div class="toolbar">
+            <div class="chip preset" data-preset="jelly">Jelly</div>
+            <div class="chip preset" data-preset="rigid">Rigid</div>
+            <div class="chip preset" data-preset="bouncy">Bouncy</div>
+            <div class="chip preset" data-preset="floaty">Floaty</div>
+            <div class="chip preset chaos" data-preset="chaos">Happy Accident</div>
+        </div>
+
+        <div class="toolbar" style="justify-content: space-between;">
+            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                <label class="toggle-group"><input type="checkbox" id="toggle-node-trails" checked> Node Trails</label>
+                <label class="toggle-group"><input type="checkbox" id="toggle-box-trails" checked> Box Trails</label>
+                <label class="toggle-group"><input type="checkbox" id="toggle-fill" checked> Fill Box</label>
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <button id="lock-btn" class="btn-alt" style="display:none;">Lock Geometry</button>
+                <button id="unlock-btn" class="btn-alt" style="display:none;">Unlock</button>
+                <button id="pause-btn" class="btn-alt">Pause</button>
+                <button id="reset-btn">⟳ Recompile</button>
+            </div>
+        </div>
+
+        <div class="toolbar">
+            <div class="chip"><label>Box Core</label><input type="color" id="box-color" value="#38bdf8"></div>
+            <div class="chip"><label>Box Tail</label><input type="color" id="trail-color" value="#0ea5e9"></div>
+            <div class="chip"><label>Void BG</label><input type="color" id="bg-color" value="#0c0c10"></div>
+            <div class="tail-row">
+                <span>Memory Tail</span>
+                <input type="range" id="tail-range" min="0" max="9500" step="1" value="45">
+                <input type="number" id="tail-number" min="0" max="9999" step="1" value="45">
+            </div>
+        </div>
+
+        <div class="node-palette-header">
+            <span>Vertex Color Matrix</span>
+            <div class="chip" style="background: #2a1124; border: 1px solid #ff3bc9;"><label style="color:#ff3bc9;">Override All</label><input type="color" id="global-node-color" value="#ffffff"></div>
+        </div>
+        <div class="node-palette" id="node-palette"></div>
+    </div>
+
+    <script>
+    (function () {
+        const container = document.getElementById('viewport');
+        const canvas    = document.getElementById('canvas');
+        const ctx       = canvas.getContext('2d');
+
+        let width, height;
+        let paused = false;
+        let shapeLocked = false;
         
-        // apply contrast
-        if (contrast !== 1.0) {
-          r = Math.min(255, Math.max(0, contrastFactor * (r - 128) + 128));
-          g = Math.min(255, Math.max(0, contrastFactor * (g - 128) + 128));
-          b = Math.min(255, Math.max(0, contrastFactor * (b - 128) + 128));
+        let config = {
+            nodeCount:      4,
+            radius:         80,
+            friction:       0.999,
+            gravity:        0,
+            edgeStiffness:  0.0001,
+            diagStiffness:  0,
+            bounce:         0.80,
+            subSteps:       40,
+            boxColor:       '#38bdf8',
+            trailColor:     '#0ea5e9',
+            trailLength:    445
+        };
+
+        let bgColor        = '#0c0c10';
+        let showNodeTrails = true;
+        let showBoxTrails  = true;
+        let showBoxFill    = true;
+        
+        const masterColors = ['#ff6b6b','#4ecdc4','#45b7d1','#96ceb4','#ffeaa7','#dfe6e9','#fd79a8','#a29bfe','#55efc4','#81ecec','#74b9ff','#a29bfe'];
+        let nodeColors  = [...masterColors].slice(0, config.nodeCount);
+
+        let nodes       = [];
+        let constraints = [];
+        let mouse       = { x: 0, y: 0, isDown: false };
+        let grabbedNode = null;
+
+        // ── Physics Classes ───────────────────────────────────────────
+        class Node {
+            constructor(x, y, idx) {
+                this.x = x; this.y = y;
+                this.px = x; this.py = y;
+                this.idx = idx;
+                this.history = [];
+            }
+            saveHistory() {
+                if (config.trailLength <= 0) { this.history = []; return; }
+                this.history.push({ x: this.x, y: this.y });
+                if (this.history.length > config.trailLength) this.history.shift();
+            }
+            trimHistory() {
+                while (this.history.length > config.trailLength) this.history.shift();
+            }
         }
-        
-        // 🗑️🔥 HUE SHIFT (creative core)
-        const shifted = hueShiftRGB(r, g, b, hueShiftDeg);
-        r = shifted.r; g = shifted.g; b = shifted.b;
-        
-        // Bayer dither offset (per pixel, based on low-res x,y)
-        const bayerVal = BAYER_MATRIX[y % 8][x % 8];
-        const offset = (bayerVal - 0.5) * spread;
-        
-        let finalR, finalG, finalB;
-        
-        if (usePalette) {
-          // palette mode uses luminance + offset
-          let lum = 0.299 * r + 0.587 * g + 0.114 * b + offset;
-          lum = Math.min(255, Math.max(0, lum));
-          const paletteIdx = Math.min(usePalette.length-1, Math.floor(lum / 256 * usePalette.length));
-          finalR = usePalette[paletteIdx][0];
-          finalG = usePalette[paletteIdx][1];
-          finalB = usePalette[paletteIdx][2];
-        } else if (colorMode === 'color') {
-          // color ordered dither : each channel independently
-          finalR = quantChannel(r, bands, offset);
-          finalG = quantChannel(g, bands, offset);
-          finalB = quantChannel(b, bands, offset);
-        } else {
-          // fallback bw dither (if needed)
-          let lum = 0.299 * r + 0.587 * g + 0.114 * b + offset;
-          lum = Math.min(255, Math.max(0, lum));
-          const mono = lum > 127 ? 255 : 0;
-          finalR = finalG = finalB = mono;
+
+        class SoftConstraint {
+            constructor(n1, n2, type) {
+                this.n1 = n1; this.n2 = n2; this.type = type;
+                this.baseLength = Math.hypot(n2.x - n1.x, n2.y - n1.y);
+                this.targetLength = this.baseLength;
+            }
+            solve() {
+                const dx = this.n2.x - this.n1.x;
+                const dy = this.n2.y - this.n1.y;
+                const len = Math.hypot(dx, dy) || 0.001;
+                const delta = this.targetLength - len;
+                const stiff = this.type === 'edge' ? config.edgeStiffness : config.diagStiffness;
+                const pct = (delta / len) * 0.5 * stiff;
+                this.n1.x -= dx * pct; this.n1.y -= dy * pct;
+                this.n2.x += dx * pct; this.n2.y += dy * pct;
+            }
         }
-        
-        // upscale pixel blocks
-        const baseX = x * px;
-        const baseY = y * px;
-        for (let dy = 0; dy < px; dy++) {
-          for (let dx = 0; dx < px; dx++) {
-            const di = ((baseY + dy) * outWidth + (baseX + dx)) * 4;
-            dst[di] = finalR;
-            dst[di+1] = finalG;
-            dst[di+2] = finalB;
-            dst[di+3] = 255;
-          }
+
+        // ── Matrix Initialization ─────────────────────────────────────
+        function initEntity() {
+            const n  = config.nodeCount;
+            const cx = width / 2;
+            const cy = height / 2.6;
+            const r  = config.radius;
+            
+            const oldHistories = nodes.map(nd => nd.history);
+            nodes = [];
+            for (let i = 0; i < n; i++) {
+                const angle = (i / n) * Math.PI * 2 - Math.PI / 2;
+                let node = new Node(cx + Math.cos(angle) * r, cy + Math.sin(angle) * r, i);
+                if (oldHistories[i]) {
+                    node.history = oldHistories[i];
+                    node.trimHistory();
+                }
+                nodes.push(node);
+            }
+            buildConstraints();
+            shapeLocked = false;
+            updateLockUI();
         }
-      }
-    }
-    
-    oCtx.putImageData(imgData, 0, 0);
-  }
-  
-  // ---- animation loop with FPS ----
-  let animFrameId = null;
-  function renderLoop(timestamp) {
-    if (!animationRunning) return;
-    drawFrame();
-    frameCount++;
-    if (timestamp - lastFpsTime >= 1000) {
-      fpsSpan.textContent = frameCount + ' fps';
-      frameCount = 0;
-      lastFpsTime = timestamp;
-    }
-    animFrameId = requestAnimationFrame(renderLoop);
-  }
-  
-  // ---- CAMERA INIT (with error fallback) ----
-  async function initCamera() {
-    if (activeStream) {
-      activeStream.getTracks().forEach(track => track.stop());
-    }
-    try {
-      const constraints = {
-        video: { facingMode: { exact: facing }, width: { ideal: 640 }, height: { ideal: 480 } }
-      };
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      activeStream = stream;
-      video.srcObject = stream;
-      await video.play();
-      startScreen.style.display = 'none';
-      animationRunning = true;
-      if (animFrameId) cancelAnimationFrame(animFrameId);
-      frameCount = 0;
-      lastFpsTime = performance.now();
-      animFrameId = requestAnimationFrame(renderLoop);
-    } catch (err) {
-      // fallback: try without exact facingMode
-      try {
-        const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing } });
-        activeStream = fallbackStream;
-        video.srcObject = fallbackStream;
-        await video.play();
-        startScreen.style.display = 'none';
-        animationRunning = true;
-        animFrameId = requestAnimationFrame(renderLoop);
-      } catch (err2) {
-        startScreen.style.display = 'flex';
-        const errMsg = document.querySelector('#start-screen p');
-        errMsg.innerHTML = `⚠️ CAMERA ERROR<br>${err2.message.substring(0, 60)}`;
-      }
-    }
-  }
-  
-  function flipCamera() {
-    facing = (facing === 'environment') ? 'user' : 'environment';
-    initCamera();
-  }
-  
-  function saveSnapshot() {
-    if (!outputCanvas.width) return;
-    const link = document.createElement('a');
-    link.download = `dither_${Date.now()}.png`;
-    link.href = outputCanvas.toDataURL('image/png');
-    link.click();
-  }
-  
-  // ---- RESET DEFAULTS (restores all params, keeps camera) ----
-  function resetDefaults() {
-    sPx.value = '4';
-    sSpread.value = '50';
-    sBands.value = '4';
-    sContrast.value = '1.0';
-    sSGap.value = '4';
-    sHue.value = '0';
-    sMirror.value = 'h';
-    sMode.value = 'color';
-    updateUI();
-    // refresh scanline style if active
-    if (scanlinesActive) applyScanlineStyle();
-    // also force mirror select update
-    const evt = new Event('change');
-    sMirror.dispatchEvent(evt);
-  }
-  
-  // ---- event listeners binding ----
-  function bindControls() {
-    sPx.addEventListener('input', () => updateUI());
-    sSpread.addEventListener('input', () => updateUI());
-    sBands.addEventListener('input', () => updateUI());
-    sContrast.addEventListener('input', () => updateUI());
-    sSGap.addEventListener('input', () => { updateUI(); if (scanlinesActive) applyScanlineStyle(); });
-    sHue.addEventListener('input', () => updateUI());
-    document.querySelectorAll('#controls input, #controls select').forEach(el => {
-      el.addEventListener('change', () => { /* just to refresh UI on change */ });
-    });
-  }
-  
-  // panel toggle
-  function togglePanel() {
-    bottomSheet.classList.toggle('open');
-    pullTab.textContent = bottomSheet.classList.contains('open') ? '▾ UI' : '▴ UI';
-  }
-  
-  // ---- initialization ----
-  function setupUI() {
-    startBtn.onclick = () => initCamera();
-    document.getElementById('boot-btn').onclick = () => initCamera();
-    document.getElementById('flip-btn').onclick = () => flipCamera();
-    document.getElementById('scan-btn').onclick = () => toggleScanlines();
-    document.getElementById('reset-btn').onclick = () => resetDefaults();
-    document.getElementById('save-btn').onclick = () => saveSnapshot();
-    pullTab.onclick = () => togglePanel();
-    
-    bindControls();
-    updateUI();
-    // default scanline style (prep)
-    applyScanlineStyle();
-    scanOverlay.classList.remove('on');
-    scanlinesActive = false;
-    scanBtn.textContent = 'SCAN';
-  }
-  
-  // handle resize & orientation (reflow)
-  window.addEventListener('resize', () => {});
-  setupUI();
-  
-  // optional: prefill default values
-  resetDefaults();
-</script>
+
+        function buildConstraints() {
+            constraints = [];
+            const n = nodes.length;
+            for (let i = 0; i < n; i++) {
+                constraints.push(new SoftConstraint(nodes[i], nodes[(i + 1) % n], 'edge'));
+            }
+            for (let i = 0; i < n; i++) {
+                for (let j = i + 2; j < n; j++) {
+                    if (i === 0 && j === n - 1) continue;
+                    constraints.push(new SoftConstraint(nodes[i], nodes[j], 'diagonal'));
+                }
+            }
+        }
+
+        // ── Geometry Locks ────────────────────────────────────────────
+        function lockShape() {
+            shapeLocked = true;
+            constraints.forEach(c => {
+                c.targetLength = Math.hypot(c.n2.x - c.n1.x, c.n2.y - c.n1.y);
+            });
+            updateLockUI();
+        }
+
+        function unlockShape() {
+            shapeLocked = false;
+            constraints.forEach(c => {
+                c.targetLength = c.baseLength;
+            });
+            updateLockUI();
+        }
+
+        function updateLockUI() {
+            document.getElementById('lock-btn').style.display   = (paused && !shapeLocked) ? 'inline-flex' : 'none';
+            document.getElementById('unlock-btn').style.display = shapeLocked              ? 'inline-flex' : 'none';
+        }
+
+        function togglePause() {
+            paused = !paused;
+            document.getElementById('pause-btn').innerText = paused ? 'Resume' : 'Pause';
+            updateLockUI();
+        }
+
+        function pokeAt(x, y) {
+            nodes.forEach(n => {
+                const dx = n.x - x, dy = n.y - y;
+                const dist = Math.max(18, Math.hypot(dx, dy));
+                const strength = 1200 / dist;
+                const ang = Math.atan2(dy, dx);
+                n.x += Math.cos(ang) * strength;
+                n.y += Math.sin(ang) * strength;
+            });
+        }
+
+        // ── Memory / Local Storage ────────────────────────────────────
+        function saveState() {
+            try {
+                localStorage.setItem('v8DriftState_v2', JSON.stringify({
+                    config, bgColor, showNodeTrails, showBoxTrails, showBoxFill, nodeColors
+                }));
+            } catch (e) {}
+        }
+
+        function loadState() {
+            try {
+                const raw = localStorage.getItem('v8DriftState_v2');
+                if (!raw) return;
+                const saved = JSON.parse(raw);
+                if (saved.config) Object.assign(config, saved.config);
+                if (saved.bgColor) bgColor = saved.bgColor;
+                if (typeof saved.showNodeTrails === 'boolean') showNodeTrails = saved.showNodeTrails;
+                if (typeof saved.showBoxTrails === 'boolean') showBoxTrails = saved.showBoxTrails;
+                if (typeof saved.showBoxFill === 'boolean') showBoxFill = saved.showBoxFill;
+                if (saved.nodeColors) {
+                    nodeColors = saved.nodeColors;
+                    while(nodeColors.length < config.nodeCount) nodeColors.push(masterColors[nodeColors.length % masterColors.length]);
+                }
+            } catch (e) {}
+        }
+
+        // ── Verlet Integration Loop ───────────────────────────────────
+        function updatePhysics() {
+            if (paused) return;
+
+            nodes.forEach(n => {
+                if (n === grabbedNode) return;
+                const vx = (n.x - n.px) * config.friction;
+                const vy = (n.y - n.py) * config.friction;
+                n.px = n.x; n.py = n.y;
+                n.x += vx;
+                n.y += vy + (config.gravity / config.subSteps);
+            });
+
+            for (let step = 0; step < config.subSteps; step++) {
+                if (grabbedNode) {
+                    grabbedNode.x = mouse.x; grabbedNode.y = mouse.y;
+                    grabbedNode.px = mouse.x; grabbedNode.py = mouse.y;
+                }
+                
+                constraints.forEach(c => c.solve());
+
+                nodes.forEach(n => {
+                    const vx = (n.x - n.px) * config.friction;
+                    const vy = (n.y - n.py) * config.friction;
+                    if (n.y > height) { n.y = height; n.py = n.y + vy * config.bounce; n.x -= vx * 0.12; }
+                    if (n.y < 0)      { n.y = 0;      n.py = n.y + vy * config.bounce; n.x -= vx * 0.12; }
+                    if (n.x < 0)      { n.x = 0;      n.px = n.x + vx * config.bounce; }
+                    if (n.x > width)  { n.x = width;  n.px = n.x + vx * config.bounce; }
+                });
+            }
+            nodes.forEach(n => n.saveHistory());
+        }
+
+        // ── Render Pipeline ───────────────────────────────────────────
+        function hexToRgba(hex, alpha) {
+            const r = parseInt(hex.slice(1, 3), 16);
+            const g = parseInt(hex.slice(3, 5), 16);
+            const b = parseInt(hex.slice(5, 7), 16);
+            return `rgba(${r},${g},${b},${alpha})`;
+        }
+
+        function draw() {
+            ctx.fillStyle = bgColor;
+            ctx.fillRect(0, 0, width, height);
+
+            if (config.trailLength > 0 && nodes.length > 0) {
+                if (showBoxTrails) {
+                    for (let i = 0; i < config.trailLength; i++) {
+                        if (nodes.every(n => n.history[i])) {
+                            let alpha = (i / config.trailLength) * 0.25;
+                            ctx.fillStyle = hexToRgba(config.trailColor, alpha * 0.8);
+                            ctx.strokeStyle = hexToRgba(config.trailColor, alpha * 1.1);
+                            ctx.lineWidth = 1.2;
+                            ctx.beginPath();
+                            ctx.moveTo(nodes[0].history[i].x, nodes[0].history[i].y);
+                            for (let j = 1; j < nodes.length; j++) ctx.lineTo(nodes[j].history[i].x, nodes[j].history[i].y);
+                            ctx.closePath();
+                            ctx.fill();
+                            ctx.stroke();
+                        }
+                    }
+                }
+                
+                if (showNodeTrails) {
+                    nodes.forEach((n, idx) => {
+                        if (n.history.length < 2) return;
+                        ctx.strokeStyle = nodeColors[idx % nodeColors.length];
+                        ctx.lineWidth = 1.8;
+                        ctx.globalAlpha = 0.6;
+                        ctx.beginPath();
+                        ctx.moveTo(n.history[0].x, n.history[0].y);
+                        n.history.forEach(h => ctx.lineTo(h.x, h.y));
+                        ctx.stroke();
+                        ctx.globalAlpha = 1;
+                    });
+                }
+            }
+
+            if (showBoxFill && nodes.length > 0) {
+                ctx.fillStyle = hexToRgba(config.boxColor, 0.22);
+                ctx.beginPath();
+                ctx.moveTo(nodes[0].x, nodes[0].y);
+                for (let i = 1; i < nodes.length; i++) ctx.lineTo(nodes[i].x, nodes[i].y);
+                ctx.closePath();
+                ctx.fill();
+            }
+
+            constraints.forEach(c => {
+                const isEdge = c.type === 'edge';
+                ctx.strokeStyle = isEdge ? config.boxColor : hexToRgba(config.boxColor, 0.45);
+                ctx.lineWidth   = isEdge ? 4.2 : 2.2;
+                ctx.beginPath();
+                ctx.moveTo(c.n1.x, c.n1.y);
+                ctx.lineTo(c.n2.x, c.n2.y);
+                ctx.stroke();
+            });
+
+            if (grabbedNode) {
+                ctx.strokeStyle = '#ff7b7e';
+                ctx.lineWidth = 1.8;
+                ctx.setLineDash([6, 8]);
+                ctx.beginPath();
+                ctx.moveTo(grabbedNode.x, grabbedNode.y);
+                ctx.lineTo(mouse.x, mouse.y);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+
+            nodes.forEach((n, idx) => {
+                const isGrabbed = n === grabbedNode;
+                ctx.fillStyle   = isGrabbed ? '#ff6b7c' : nodeColors[idx % nodeColors.length];
+                ctx.shadowBlur  = isGrabbed ? 12 : 4;
+                ctx.shadowColor = ctx.fillStyle;
+                ctx.beginPath();
+                ctx.arc(n.x, n.y, isGrabbed ? 7 : 5.5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = config.boxColor;
+                ctx.lineWidth   = 2;
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.arc(n.x, n.y, 2.2, 0, Math.PI * 2);
+                ctx.fillStyle = '#ffffffdd';
+                ctx.fill();
+            });
+            ctx.shadowBlur = 0;
+        }
+
+        function animate() { updatePhysics(); draw(); requestAnimationFrame(animate); }
+
+        // ── Input Mux ─────────────────────────────────────────────────
+        function getCanvasCoords(e) {
+            const rect = canvas.getBoundingClientRect();
+            const sx = canvas.width / rect.width;
+            const sy = canvas.height / rect.height;
+            const src = e.touches ? e.touches[0] : e;
+            return {
+                x: Math.min(width,  Math.max(0, (src.clientX - rect.left) * sx)),
+                y: Math.min(height, Math.max(0, (src.clientY - rect.top)  * sy))
+            };
+        }
+
+        function onPointerDown(e) {
+            if (e.target.closest && (e.target.closest('#control-panel') || e.target.closest('button'))) return;
+            e.preventDefault();
+            const { x, y } = getCanvasCoords(e);
+            mouse.x = x; mouse.y = y; mouse.isDown = true;
+            let closest = null, minD = 52;
+            nodes.forEach(n => { const d = Math.hypot(n.x - x, n.y - y); if (d < minD) { minD = d; closest = n; } });
+            grabbedNode = closest;
+            if (!grabbedNode) pokeAt(x, y);
+        }
+        function onPointerMove(e) {
+            if (!mouse.isDown || !grabbedNode) return;
+            e.preventDefault();
+            const { x, y } = getCanvasCoords(e);
+            mouse.x = x; mouse.y = y;
+            grabbedNode.x = x; grabbedNode.y = y;
+            grabbedNode.px = x; grabbedNode.py = y;
+        }
+        function onPointerUp() { grabbedNode = null; mouse.isDown = false; }
+
+        // ── DOM Bindings ──────────────────────────────────────────────
+        const presets = {
+            jelly:  { friction: 0.995, gravity: 0.40, edgeStiffness: 0.25, diagStiffness: 0.08, bounce: 0.80, subSteps: 40 },
+            rigid:  { friction: 0.990, gravity: 0.80, edgeStiffness: 1.20, diagStiffness: 1.00, bounce: 0.30, subSteps: 80 },
+            bouncy: { friction: 0.999, gravity: 0.90, edgeStiffness: 0.35, diagStiffness: 0.10, bounce: 1.60, subSteps: 50 },
+            floaty: { friction: 0.985, gravity: 0.05, edgeStiffness: 0.10, diagStiffness: 0.03, bounce: 0.40, subSteps: 30 }
+        };
+
+        function applyPreset(name) {
+            if (name === 'chaos') {
+                config.friction = 0.8 + Math.random() * 0.2;
+                config.gravity = -0.5 + Math.random() * 2.5;
+                config.edgeStiffness = -0.5 + Math.random() * 1.5;
+                config.diagStiffness = -0.5 + Math.random() * 1.5;
+                config.bounce = Math.random() * 2;
+                config.subSteps = 10 + Math.floor(Math.random() * 90);
+                config.nodeCount = 3 + Math.floor(Math.random() * 7);
+                syncSliders();
+                rebuildNodePalette();
+                initEntity();
+            } else {
+                const p = presets[name];
+                if (!p) return;
+                Object.assign(config, p);
+                syncSliders();
+            }
+            saveState();
+        }
+
+        function syncSliders() {
+            const map = [
+                ['nodes', config.nodeCount, v=>v],
+                ['radius', config.radius, v=>v],
+                ['friction', config.friction, v=>v.toFixed(3)],
+                ['gravity', config.gravity, v=>v.toFixed(2)],
+                ['edge', config.edgeStiffness, v=>v.toFixed(2)],
+                ['diag', config.diagStiffness, v=>v.toFixed(2)],
+                ['bounce', config.bounce, v=>v.toFixed(2)],
+                ['substeps', config.subSteps, v=>v]
+            ];
+            map.forEach(([key, val, fmt]) => {
+                const slider = document.getElementById(`${key}-slider`);
+                const disp = document.getElementById(`${key}-val`);
+                if (slider) slider.value = val;
+                if (disp) disp.innerText = fmt(val);
+            });
+        }
+
+        function rebuildNodePalette() {
+            const palette = document.getElementById('node-palette');
+            palette.innerHTML = '';
+            
+            while(nodeColors.length < config.nodeCount) nodeColors.push(masterColors[nodeColors.length % masterColors.length]);
+            if(nodeColors.length > config.nodeCount) nodeColors.length = config.nodeCount;
+            
+            for (let i = 0; i < config.nodeCount; i++) {
+                const swatch = document.createElement('div');
+                swatch.className = 'node-swatch';
+                swatch.innerHTML = `<span>N${i}</span><input type="color" value="${nodeColors[i]}">`;
+                swatch.querySelector('input').addEventListener('input', e => {
+                    nodeColors[i] = e.target.value;
+                    saveState();
+                });
+                palette.appendChild(swatch);
+            }
+        }
+
+        function bindUI() {
+            const bindSlider = (key, mapFn, callback) => {
+                document.getElementById(`${key}-slider`).addEventListener('input', e => {
+                    const val = mapFn(e.target.value);
+                    config[key === 'edge' ? 'edgeStiffness' : key === 'diag' ? 'diagStiffness' : key === 'nodes' ? 'nodeCount' : key] = val;
+                    document.getElementById(`${key}-val`).innerText = typeof val === 'number' && val % 1 !== 0 ? val.toFixed(key==='friction'?3:2) : val;
+                    if(callback) callback();
+                    saveState();
+                });
+            };
+
+            bindSlider('nodes', parseInt, () => { shapeLocked=false; rebuildNodePalette(); initEntity(); updateLockUI(); });
+            bindSlider('radius', parseInt, initEntity);
+            bindSlider('friction', parseFloat);
+            bindSlider('gravity', parseFloat);
+            bindSlider('edge', parseFloat);
+            bindSlider('diag', parseFloat);
+            bindSlider('bounce', parseFloat);
+            bindSlider('substeps', parseInt);
+
+            document.getElementById('box-color').addEventListener('input', e => { config.boxColor = e.target.value; saveState(); });
+            document.getElementById('trail-color').addEventListener('input', e => { config.trailColor = e.target.value; saveState(); });
+            document.getElementById('bg-color').addEventListener('input', e => { bgColor = e.target.value; saveState(); });
+
+            document.getElementById('global-node-color').addEventListener('input', e => { 
+                const val = e.target.value;
+                nodeColors = nodeColors.map(() => val);
+                rebuildNodePalette();
+                saveState();
+            });
+
+            document.getElementById('toggle-node-trails').addEventListener('change', e => { showNodeTrails = e.target.checked; saveState(); });
+            document.getElementById('toggle-box-trails').addEventListener('change', e => { showBoxTrails = e.target.checked; saveState(); });
+            document.getElementById('toggle-fill').addEventListener('change', e => { showBoxFill = e.target.checked; saveState(); });
+
+            const tailRange = document.getElementById('tail-range');
+            const tailNumber = document.getElementById('tail-number');
+            const updateTail = v => {
+                v = Math.max(0, Math.min(9999, v));
+                config.trailLength = v;
+                tailRange.value = v; tailNumber.value = v;
+                nodes.forEach(n => n.trimHistory());
+                saveState();
+            };
+            tailRange.addEventListener('input', e => updateTail(parseInt(e.target.value) || 0));
+            tailNumber.addEventListener('input', e => updateTail(parseInt(e.target.value) || 0));
+
+            document.getElementById('pause-btn').addEventListener('click', togglePause);
+            document.getElementById('lock-btn').addEventListener('click', lockShape);
+            document.getElementById('unlock-btn').addEventListener('click', unlockShape);
+            document.getElementById('reset-btn').addEventListener('click', () => { shapeLocked = false; nodes.forEach(n => n.history = []); initEntity(); });
+
+            document.querySelectorAll('.chip.preset').forEach(el => {
+                el.addEventListener('click', () => applyPreset(el.getAttribute('data-preset')));
+            });
+        }
+
+        function handleResize() {
+            const nw = container.clientWidth, nh = container.clientHeight;
+            if (nw === width && nh === height) return;
+            const dx = nw / 2 - width / 2, dy = nh / 2.6 - height / 2.6;
+            nodes.forEach(n => {
+                n.x += dx; n.y += dy; n.px += dx; n.py += dy;
+                n.history.forEach(h => { h.x += dx; h.y += dy; });
+            });
+            width = nw; height = nh;
+            canvas.width = width; canvas.height = height;
+        }
+
+        function setup() {
+            width  = container.clientWidth;
+            height = container.clientHeight;
+            canvas.width  = width;
+            canvas.height = height;
+            
+            loadState();
+            initEntity();
+            rebuildNodePalette();
+            syncSliders();
+            bindUI();
+            
+            document.getElementById('toggle-node-trails').checked = showNodeTrails;
+            document.getElementById('toggle-box-trails').checked = showBoxTrails;
+            document.getElementById('toggle-fill').checked   = showBoxFill;
+            document.getElementById('box-color').value = config.boxColor;
+            document.getElementById('trail-color').value = config.trailColor;
+            document.getElementById('bg-color').value = bgColor;
+            document.getElementById('tail-range').value = config.trailLength;
+            document.getElementById('tail-number').value = config.trailLength;
+            updateLockUI();
+            
+            window.addEventListener('resize', handleResize);
+            canvas.addEventListener('mousedown', onPointerDown);
+            window.addEventListener('mousemove', onPointerMove);
+            window.addEventListener('mouseup',   onPointerUp);
+            canvas.addEventListener('touchstart', onPointerDown, { passive: false });
+            window.addEventListener('touchmove',  onPointerMove, { passive: false });
+            window.addEventListener('touchend',   onPointerUp);
+            
+            animate();
+        }
+
+        setup();
+    })();
+    </script>
 </body>
 </html>
