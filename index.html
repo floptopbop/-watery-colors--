@@ -2,638 +2,688 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Jelly Singularity | V8.2 Drift (Locked Geometry Patch)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>sumi-e — living water on stone</title>
     <style>
-        * { user-select: none; -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #0c0c10; font-family: 'Inter', 'SF Mono', monospace; touch-action: pan-y pinch-zoom; }
-        
-        #viewport { position: relative; width: 100%; height: 65%; background: #0f0f14; cursor: grab; touch-action: none; }
-        #viewport:active { cursor: grabbing; }
-        canvas { display: block; width: 100%; height: 100%; }
-        
-        #control-panel { position: relative; background: rgba(10,10,14,0.96); backdrop-filter: blur(10px); border-top: 1px solid rgba(56,189,248,0.3); box-shadow: 0 -8px 24px rgba(0,0,0,0.6); width: 100%; height: 35%; overflow-y: auto; padding: 12px 16px 20px; z-index: 20; scrollbar-width: thin; font-family: 'SF Mono','Inter',monospace; }
-        
-        .param-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px 14px; margin-bottom: 14px; }
-        .param-item { display: flex; flex-direction: column; gap: 4px; }
-        .param-header { display: flex; justify-content: space-between; font-size: 10px; font-weight: 600; letter-spacing: 0.3px; text-transform: uppercase; color: #9191a5; }
-        .param-header span.value { color: #3bc9ff; background: #1a1a24; padding: 2px 8px; border-radius: 24px; font-family: monospace; font-size: 10px; }
-        
-        input[type="range"] { appearance: none; -webkit-appearance: none; background: #23232b; height: 4px; border-radius: 4px; outline: none; }
-        input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; background: #3bc9ff; border-radius: 50%; cursor: pointer; box-shadow: 0 0 4px #00a6ff; border: none; }
-        
-        .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 12px 0 10px; padding: 8px 0; border-top: 1px solid rgba(56,189,248,0.2); }
-        
-        .chip { display: inline-flex; align-items: center; gap: 6px; background: #171721; padding: 5px 12px; border-radius: 32px; font-size: 11px; font-weight: 500; color: #ddddff; }
-        .chip.preset { cursor: pointer; transition: 0.1s ease; border: 1px solid transparent; }
-        .chip.preset:hover { border-color: #3bc9ff; color: #3bc9ff; }
-        .chip.preset.chaos { background: #2a1124; color: #ff3bc9; border-color: #ff3bc9; }
-        .chip label { color: #a0a0b5; cursor: pointer; }
-        
-        input[type="color"] { width: 32px; height: 28px; border: 1px solid #3a3a44; border-radius: 10px; background: #0a0a0f; cursor: pointer; padding: 2px; }
-        
-        .toggle-group { display: inline-flex; align-items: center; gap: 8px; background: #171721; padding: 5px 14px; border-radius: 32px; font-size: 11px; font-weight: 500; color: #ddddff; cursor: pointer; }
-        .toggle-group input { width: 17px; height: 17px; accent-color: #3bc9ff; margin: 0; cursor: pointer; }
-        
-        .tail-row { display: flex; align-items: center; gap: 10px; background: #171721; padding: 5px 12px; border-radius: 32px; flex: 1 1 auto; }
-        .tail-row span { font-size: 11px; font-weight: 500; color: #bcbce6; }
-        #tail-number { width: 56px; background: #08080c; border: 1px solid #3bc9ff; color: #3bc9ff; font-family: monospace; font-weight: 600; border-radius: 32px; text-align: center; padding: 5px; font-size: 11px; outline: none; }
-        
-        .node-palette-header { width: 100%; display: flex; align-items: center; justify-content: space-between; margin-top: 16px; margin-bottom: 8px; }
-        .node-palette-header span { font-size: 10px; font-weight: 600; color: #9191a5; text-transform: uppercase; letter-spacing: 0.3px; }
-        
-        .node-palette { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 4px; }
-        .node-swatch { display: flex; align-items: center; gap: 6px; background: #13131c; padding: 4px 10px; border-radius: 32px; font-size: 10px; font-weight: 600; }
-        .node-swatch span { color: #cdcdf5; width: 22px; }
-        .node-swatch input[type="color"] { width: 24px; height: 24px; }
-        
-        button { background: #1a5a7a; color: #3bc9ff; border: 1px solid #3bc9ff; padding: 6px 14px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; transition: 0.1s ease; }
-        button:active { background: #0f4a5f; transform: scale(0.97); }
-        .btn-alt { background: #171721; color: #3bc9ff; }
-        
-        #control-panel::-webkit-scrollbar { width: 3px; }
-        #control-panel::-webkit-scrollbar-track { background: #1e1e2a; }
-        #control-panel::-webkit-scrollbar-thumb { background: #3bc9ff; border-radius: 8px; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        html,
+        body {
+            width: 100%;
+            height: 100dvh;
+            background: #c8c3b8;
+            overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+        }
+        canvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
+            touch-action: none;
+        }
+
+        /* ── tap-to-reveal tray ── */
+        #tray {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 14px 20px 28px;
+            background: rgba(38, 34, 30, 0.78);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
+            transform: translateY(100%);
+            opacity: 0;
+            z-index: 10;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        #tray.visible {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        /* ink swatches */
+        .swatch {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid rgba(255, 255, 255, 0.16);
+            flex-shrink: 0;
+            transition: transform 0.18s, border-color 0.18s, box-shadow 0.18s;
+            position: relative;
+        }
+        .swatch:hover {
+            transform: scale(1.15);
+            border-color: rgba(255, 255, 255, 0.4);
+        }
+        .swatch.active {
+            border-color: rgba(255, 255, 255, 0.8);
+            transform: scale(1.25);
+            box-shadow: 0 0 14px rgba(255, 255, 255, 0.15);
+        }
+
+        .divider {
+            width: 1px;
+            height: 24px;
+            background: rgba(255, 255, 255, 0.13);
+            flex-shrink: 0;
+        }
+
+        /* ghost text buttons */
+        .ghost-btn {
+            font-family: 'Courier New', monospace;
+            font-size: 0.68rem;
+            letter-spacing: 0.1em;
+            color: rgba(255, 255, 255, 0.5);
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 6px 4px;
+            transition: color 0.18s;
+            white-space: nowrap;
+        }
+        .ghost-btn:hover {
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .sp {
+            flex: 1;
+        }
+
+        /* hint text */
+        #hint {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-family: 'Courier New', monospace;
+            font-size: 1.8rem;
+            letter-spacing: 0.25em;
+            color: rgba(70, 60, 50, 0.25);
+            pointer-events: none;
+            transition: opacity 1.8s ease;
+            text-align: center;
+            line-height: 2.4;
+            z-index: 5;
+        }
+        #hint.gone {
+            opacity: 0;
+        }
+        #hint span {
+            font-size: 0.55rem;
+            letter-spacing: 0.28em;
+            color: rgba(70, 60, 50, 0.15);
+        }
     </style>
 </head>
 <body>
-    <div id="viewport"><canvas id="canvas"></canvas></div>
-    <div id="control-panel">
-        <div class="param-grid">
-            <div class="param-item"><div class="param-header"><span>Nodes</span><span class="value" id="nodes-val">5</span></div><input type="range" id="nodes-slider" min="3" max="12" value="5" step="1"></div>
-            <div class="param-item"><div class="param-header"><span>Radius</span><span class="value" id="radius-val">90</span></div><input type="range" id="radius-slider" min="10" max="260" value="90" step="1"></div>
-            <div class="param-item"><div class="param-header"><span>Air Friction</span><span class="value" id="friction-val">0.995</span></div><input type="range" id="friction-slider" min="0.9" max="1.1" step="0.001" value="0.995"></div>
-            <div class="param-item"><div class="param-header"><span>Gravity</span><span class="value" id="gravity-val">0.00</span></div><input type="range" id="gravity-slider" min="-0.1" max="3" value="0.40" step="0.01"></div>
-            <!-- We inject a microscopic step. We force it to parse the abyss. -->
-<div class="param-item">
-    <div class="param-header">
-        <span>Edge Stiff</span>
-        <span class="value" id="edge-val">0.25000</span>
+
+    <canvas id="c"></canvas>
+
+    <div id="hint">
+        water on stone<br>
+        <span>trace the moment — it fades</span>
     </div>
-    <!-- Dropped step from 0.0001 down to 0.000001. -->
-    <input type="range" id="edge-slider" min="0.000000" max="0.500000" value="0.250000" step="0.000001">
-</div>
 
-<div class="param-item">
-    <div class="param-header">
-        <span>Diag Stiff</span>
-        <span class="value" id="diag-val">0.0500</span>
-    </div>
-    <!-- Dropped step from 0.01 down to 0.0001. A hundred times finer. -->
-    <input type="range" id="diag-slider" min="0.0000" max="0.1000" value="0.0500" step="0.0001">
-</div>
+    <div id="tray">
+        <div class="swatch active" style="background:#2a2420" data-ink="#2a2420" title="sumi"></div>
+        <div class="swatch" style="background:#3d1f14" data-ink="#3d1f14" title="sepia"></div>
+        <div class="swatch" style="background:#141c24" data-ink="#141c24" title="indigo"></div>
+        <div class="swatch" style="background:#14281D" data-ink="#14281D" title="charcoal"></div>
+        <div class="swatch" style="background:#4a1a1a" data-ink="#4a1a1a" title="cinnabar"></div>
 
-            <div class="param-item"><div class="param-header"><span>Bounce</span><span class="value" id="bounce-val">0.80</span></div><input type="range" id="bounce-slider" min="0" max="1.20" value="0.80" step="0.005"></div>
-            <div class="param-item"><div class="param-header"><span>Sub-steps</span><span class="value" id="substeps-val">40</span></div><input type="range" id="substeps-slider" min="1" max="120" value="40" step="1"></div>
-        </div>
+        <div class="divider"></div>
 
-        <div class="toolbar">
-            <div class="chip preset" data-preset="jelly">Jelly</div>
-            <div class="chip preset" data-preset="rigid">Rigid</div>
-            <div class="chip preset" data-preset="bouncy">Bouncy</div>
-            <div class="chip preset" data-preset="floaty">Floaty</div>
-            <div class="chip preset chaos" data-preset="chaos">Happy Accident</div>
-        </div>
+        <button class="ghost-btn" id="btnUndo">undo</button>
+        <button class="ghost-btn" id="btnClear">clear</button>
 
-        <div class="toolbar" style="justify-content: space-between;">
-            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-                <label class="toggle-group"><input type="checkbox" id="toggle-node-trails" checked> Node Trails</label>
-                <label class="toggle-group"><input type="checkbox" id="toggle-box-trails" checked> Box Trails</label>
-                <label class="toggle-group"><input type="checkbox" id="toggle-fill" checked> Fill Box</label>
-            </div>
-            <div style="display: flex; gap: 8px;">
-                <button id="lock-btn" class="btn-alt" style="display:none;">Lock Geometry</button>
-                <button id="unlock-btn" class="btn-alt" style="display:none;">Unlock</button>
-                <button id="pause-btn" class="btn-alt">Pause</button>
-                <button id="reset-btn">⟳ Recompile</button>
-            </div>
-        </div>
+        <div class="sp"></div>
 
-        <div class="toolbar">
-            <div class="chip"><label>Box Core</label><input type="color" id="box-color" value="#38bdf8"></div>
-            <div class="chip"><label>Box Tail</label><input type="color" id="trail-color" value="#0ea5e9"></div>
-            <div class="chip"><label>Void BG</label><input type="color" id="bg-color" value="#0c0c10"></div>
-            <div class="tail-row">
-                <span>Memory Tail</span>
-                <input type="range" id="tail-range" min="0" max="9500" step="1" value="45">
-                <input type="number" id="tail-number" min="0" max="9999" step="1" value="45">
-            </div>
-        </div>
-
-        <div class="node-palette-header">
-            <span>Vertex Color Matrix</span>
-            <div class="chip" style="background: #2a1124; border: 1px solid #ff3bc9;"><label style="color:#ff3bc9;">Override All</label><input type="color" id="global-node-color" value="#ffffff"></div>
-        </div>
-        <div class="node-palette" id="node-palette"></div>
+        <button class="ghost-btn" id="btnSave">save</button>
     </div>
 
     <script>
-    (function () {
-        const container = document.getElementById('viewport');
-        const canvas    = document.getElementById('canvas');
-        const ctx       = canvas.getContext('2d');
+        const canvas = document.getElementById('c');
+        const ctx = canvas.getContext('2d');
+        const hint = document.getElementById('hint');
+        const tray = document.getElementById('tray');
 
-        let width, height;
-        let paused = false;
-        let shapeLocked = false;
-        
-        let config = {
-            nodeCount:      4,
-            radius:         80,
-            friction:       0.999,
-            gravity:        0,
-            edgeStiffness:  0.0001,
-            diagStiffness:  0,
-            bounce:         0.80,
-            subSteps:       40,
-            boxColor:       '#38bdf8',
-            trailColor:     '#0ea5e9',
-            trailLength:    445
+        // ── THE TUNING DIALS / KNOBS ─────────────────────────────
+        const CONFIG = {
+            // How fast the water completely dries up (Lower = lasts longer)
+            // Try 0.0015 for a super slow, meditative fade!
+            evaporationSpeed: 0.0042, 
+
+            // Controls the physical "pooling" limits when your finger pauses.
+            // minBrushWidth: Minimum thickness when moving lightning fast
+            // maxBrushWidth: Maximum thickness when perfectly stationary
+            minBrushWidth: .01,
+            maxBrushWidth: 15.0, 
+
+            // Wet-ink bleeding settings
+            bleedStrength: .0000001,   // How far water creeps outward into the stone fibers
+            bleedOpacity: 0.6,   // Softness of the bleeding edge halo
+            
+            // Gyroscopic gravity impact (drift speed for drips/mist on mobile tilt)
+            gyroInfluence: 0.01,
+            
+            hankoColor: 'rgba(160, 24, 24, 0.45)',
+            hankoSymbol: '像',
         };
 
-        let bgColor        = '#0c0c10';
-        let showNodeTrails = true;
-        let showBoxTrails  = true;
-        let showBoxFill    = true;
-        
-        const masterColors = ['#ff6b6b','#4ecdc4','#45b7d1','#96ceb4','#ffeaa7','#dfe6e9','#fd79a8','#a29bfe','#55efc4','#81ecec','#74b9ff','#a29bfe'];
-        let nodeColors  = [...masterColors].slice(0, config.nodeCount);
+        // ── OFFSCREEN BUFFERS ────────────────────────────────────
+        const paperCanvas = document.createElement('canvas');
+        const paperCtx = paperCanvas.getContext('2d');
 
-        let nodes       = [];
-        let constraints = [];
-        let mouse       = { x: 0, y: 0, isDown: false };
-        let grabbedNode = null;
+        const drawingCanvas = document.createElement('canvas');
+        const drawingCtx = drawingCanvas.getContext('2d');
 
-        // ── Physics Classes ───────────────────────────────────────────
-        class Node {
-            constructor(x, y, idx) {
-                this.x = x; this.y = y;
-                this.px = x; this.py = y;
-                this.idx = idx;
-                this.history = [];
-            }
-            saveHistory() {
-                if (config.trailLength <= 0) { this.history = []; return; }
-                this.history.push({ x: this.x, y: this.y });
-                if (this.history.length > config.trailLength) this.history.shift();
-            }
-            trimHistory() {
-                while (this.history.length > config.trailLength) this.history.shift();
-            }
-        }
+        const bleedCanvas = document.createElement('canvas');
+        const bleedCtx = bleedCanvas.getContext('2d');
 
-        class SoftConstraint {
-            constructor(n1, n2, type) {
-                this.n1 = n1; this.n2 = n2; this.type = type;
-                this.baseLength = Math.hypot(n2.x - n1.x, n2.y - n1.y);
-                this.targetLength = this.baseLength;
-            }
-            solve() {
-                const dx = this.n2.x - this.n1.x;
-                const dy = this.n2.y - this.n1.y;
-                const len = Math.hypot(dx, dy) || 0.001;
-                const delta = this.targetLength - len;
-                const stiff = this.type === 'edge' ? config.edgeStiffness : config.diagStiffness;
-                const pct = (delta / len) * 0.5 * stiff;
-                this.n1.x -= dx * pct; this.n1.y -= dy * pct;
-                this.n2.x += dx * pct; this.n2.y += dy * pct;
-            }
-        }
-
-        // ── Matrix Initialization ─────────────────────────────────────
-        function initEntity() {
-            const n  = config.nodeCount;
-            const cx = width / 2;
-            const cy = height / 2.6;
-            const r  = config.radius;
-            
-            const oldHistories = nodes.map(nd => nd.history);
-            nodes = [];
-            for (let i = 0; i < n; i++) {
-                const angle = (i / n) * Math.PI * 2 - Math.PI / 2;
-                let node = new Node(cx + Math.cos(angle) * r, cy + Math.sin(angle) * r, i);
-                if (oldHistories[i]) {
-                    node.history = oldHistories[i];
-                    node.trimHistory();
-                }
-                nodes.push(node);
-            }
-            buildConstraints();
-            shapeLocked = false;
-            updateLockUI();
-        }
-
-        function buildConstraints() {
-            constraints = [];
-            const n = nodes.length;
-            for (let i = 0; i < n; i++) {
-                constraints.push(new SoftConstraint(nodes[i], nodes[(i + 1) % n], 'edge'));
-            }
-            for (let i = 0; i < n; i++) {
-                for (let j = i + 2; j < n; j++) {
-                    if (i === 0 && j === n - 1) continue;
-                    constraints.push(new SoftConstraint(nodes[i], nodes[j], 'diagonal'));
-                }
-            }
-        }
-
-        // ── Geometry Locks ────────────────────────────────────────────
-        function lockShape() {
-            shapeLocked = true;
-            constraints.forEach(c => {
-                c.targetLength = Math.hypot(c.n2.x - c.n1.x, c.n2.y - c.n1.y);
-            });
-            updateLockUI();
-        }
-
-        function unlockShape() {
-            shapeLocked = false;
-            constraints.forEach(c => {
-                c.targetLength = c.baseLength;
-            });
-            updateLockUI();
-        }
-
-        function updateLockUI() {
-            document.getElementById('lock-btn').style.display   = (paused && !shapeLocked) ? 'inline-flex' : 'none';
-            document.getElementById('unlock-btn').style.display = shapeLocked              ? 'inline-flex' : 'none';
-        }
-
-        function togglePause() {
-            paused = !paused;
-            document.getElementById('pause-btn').innerText = paused ? 'Resume' : 'Pause';
-            updateLockUI();
-        }
-
-        function pokeAt(x, y) {
-            nodes.forEach(n => {
-                const dx = n.x - x, dy = n.y - y;
-                const dist = Math.max(18, Math.hypot(dx, dy));
-                const strength = 1200 / dist;
-                const ang = Math.atan2(dy, dx);
-                n.x += Math.cos(ang) * strength;
-                n.y += Math.sin(ang) * strength;
+        function setupBuffers() {
+            const w = canvas.width;
+            const h = canvas.height;
+            [paperCanvas, drawingCanvas, bleedCanvas].forEach(c => {
+                c.width = w;
+                c.height = h;
             });
         }
 
-        // ── Memory / Local Storage ────────────────────────────────────
-        function saveState() {
-            try {
-                localStorage.setItem('v8DriftState_v2', JSON.stringify({
-                    config, bgColor, showNodeTrails, showBoxTrails, showBoxFill, nodeColors
-                }));
-            } catch (e) {}
+        // ── STATE ────────────────────────────────────────────────
+        let inkHex = '#2a2420';
+        let inkRgb = { r: 42, g: 36, b: 32 };
+        let pts = [];
+        let drawing = false;
+        let particles = [];
+        let ripple = null;
+        let hintGone = false;
+        let trayOpen = false;
+        let trayTimer = null;
+
+        // Gravity telemetry vectors
+        let gravityX = 0;
+        let gravityY = 0.1; // Slight default downward gravity drift
+
+        // ── UNDO STACK ───────────────────────────────────────────
+        let undoStack = [];
+
+        function snapUndo() {
+            undoStack.push(drawingCanvas.toDataURL());
+            if (undoStack.length > 20) undoStack.shift();
         }
 
-        function loadState() {
-            try {
-                const raw = localStorage.getItem('v8DriftState_v2');
-                if (!raw) return;
-                const saved = JSON.parse(raw);
-                if (saved.config) Object.assign(config, saved.config);
-                if (saved.bgColor) bgColor = saved.bgColor;
-                if (typeof saved.showNodeTrails === 'boolean') showNodeTrails = saved.showNodeTrails;
-                if (typeof saved.showBoxTrails === 'boolean') showBoxTrails = saved.showBoxTrails;
-                if (typeof saved.showBoxFill === 'boolean') showBoxFill = saved.showBoxFill;
-                if (saved.nodeColors) {
-                    nodeColors = saved.nodeColors;
-                    while(nodeColors.length < config.nodeCount) nodeColors.push(masterColors[nodeColors.length % masterColors.length]);
-                }
-            } catch (e) {}
+        function performUndo() {
+            if (!undoStack.length) return;
+            const img = new Image();
+            img.onload = () => {
+                drawingCtx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
+                drawingCtx.drawImage(img, 0, 0);
+            };
+            img.src = undoStack.pop();
         }
 
-        // ── Verlet Integration Loop ───────────────────────────────────
-        function updatePhysics() {
-            if (paused) return;
-
-            nodes.forEach(n => {
-                if (n === grabbedNode) return;
-                const vx = (n.x - n.px) * config.friction;
-                const vy = (n.y - n.py) * config.friction;
-                n.px = n.x; n.py = n.y;
-                n.x += vx;
-                n.y += vy + (config.gravity / config.subSteps);
-            });
-
-            for (let step = 0; step < config.subSteps; step++) {
-                if (grabbedNode) {
-                    grabbedNode.x = mouse.x; grabbedNode.y = mouse.y;
-                    grabbedNode.px = mouse.x; grabbedNode.py = mouse.y;
-                }
-                
-                constraints.forEach(c => c.solve());
-
-                nodes.forEach(n => {
-                    const vx = (n.x - n.px) * config.friction;
-                    const vy = (n.y - n.py) * config.friction;
-                    if (n.y > height) { n.y = height; n.py = n.y + vy * config.bounce; n.x -= vx * 0.12; }
-                    if (n.y < 0)      { n.y = 0;      n.py = n.y + vy * config.bounce; n.x -= vx * 0.12; }
-                    if (n.x < 0)      { n.x = 0;      n.px = n.x + vx * config.bounce; }
-                    if (n.x > width)  { n.x = width;  n.px = n.x + vx * config.bounce; }
-                });
-            }
-            nodes.forEach(n => n.saveHistory());
-        }
-
-        // ── Render Pipeline ───────────────────────────────────────────
-        function hexToRgba(hex, alpha) {
+        // ── INK HELPERS ──────────────────────────────────────────
+        function hexToRgb(hex) {
             const r = parseInt(hex.slice(1, 3), 16);
             const g = parseInt(hex.slice(3, 5), 16);
             const b = parseInt(hex.slice(5, 7), 16);
-            return `rgba(${r},${g},${b},${alpha})`;
+            return { r, g, b };
         }
 
-        function draw() {
-            ctx.fillStyle = bgColor;
-            ctx.fillRect(0, 0, width, height);
+        function setInkColor(hex) {
+            inkHex = hex;
+            inkRgb = hexToRgb(hex);
+        }
 
-            if (config.trailLength > 0 && nodes.length > 0) {
-                if (showBoxTrails) {
-                    for (let i = 0; i < config.trailLength; i++) {
-                        if (nodes.every(n => n.history[i])) {
-                            let alpha = (i / config.trailLength) * 0.25;
-                            ctx.fillStyle = hexToRgba(config.trailColor, alpha * 0.8);
-                            ctx.strokeStyle = hexToRgba(config.trailColor, alpha * 1.1);
-                            ctx.lineWidth = 1.2;
-                            ctx.beginPath();
-                            ctx.moveTo(nodes[0].history[i].x, nodes[0].history[i].y);
-                            for (let j = 1; j < nodes.length; j++) ctx.lineTo(nodes[j].history[i].x, nodes[j].history[i].y);
-                            ctx.closePath();
-                            ctx.fill();
-                            ctx.stroke();
-                        }
-                    }
-                }
+        function inkAt(alpha) {
+            const { r, g, b } = inkRgb;
+            return `rgba(${r},${g},${b},${Math.min(1, alpha)})`;
+        }
+
+        // ── WASHI PAPER GENERATOR (Clean Warm Stone) ─────────────
+        function generateWashiPaper() {
+            const w = paperCanvas.width;
+            const h = paperCanvas.height;
+
+            paperCtx.fillStyle = '#f2eee5';
+            paperCtx.fillRect(0, 0, w, h);
+
+            // Subtle paper fibers
+            const area = w * h;
+            const fiberCount = Math.floor(area / 3000);
+            paperCtx.strokeStyle = 'rgba(60, 50, 40, 0.012)';
+            for (let i = 0; i < fiberCount; i++) {
+                paperCtx.lineWidth = Math.random() * 0.15 + 0.05;
+                paperCtx.beginPath();
+                const x = Math.random() * w;
+                const y = Math.random() * h;
+                const length = Math.random() * 12 + 2;
+                const angle = Math.random() * Math.PI * 2;
+                paperCtx.moveTo(x, y);
+                paperCtx.lineTo(x + Math.cos(angle) * length, y + Math.sin(angle) * length);
+                paperCtx.stroke();
+            }
+
+            // Fine grain texture
+            const moteCount = Math.floor(area / 600);
+            paperCtx.fillStyle = 'rgba(120, 105, 85, 0.015)';
+            for (let i = 0; i < moteCount; i++) {
+                const rx = Math.random() * w;
+                const ry = Math.random() * h;
+                const radius = Math.random() * 1.5;
+                paperCtx.beginPath();
+                paperCtx.arc(rx, ry, radius, 0, Math.PI * 2);
+                paperCtx.fill();
+            }
+
+            // Radial vignette shading
+            const grad = paperCtx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.25, w / 2, h / 2, Math.max(w, h) * 0.65);
+            grad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+            grad.addColorStop(1, 'rgba(165, 155, 140, 0.15)');
+            paperCtx.fillStyle = grad;
+            paperCtx.fillRect(0, 0, w, h);
+
+            drawHankoOnPaper();
+        }
+
+        function drawHankoOnPaper() {
+            const w = paperCanvas.width;
+            const h = paperCanvas.height;
+            const size = Math.max(45, Math.min(w, h) * 0.065);
+            const x = w - size - 40;
+            const y = h - size - 40;
+
+            paperCtx.save();
+            paperCtx.fillStyle = CONFIG.hankoColor;
+            paperCtx.strokeStyle = CONFIG.hankoColor;
+            paperCtx.lineWidth = size * 0.025;
+            const pad = size * 0.08;
+            paperCtx.strokeRect(x + pad, y + pad, size - pad * 2, size - pad * 2);
+
+            paperCtx.font = `bold ${size * 0.52}px "Hiragino Mincho ProN", "Yu Mincho", "MS Mincho", serif`;
+            paperCtx.textAlign = 'center';
+            paperCtx.textBaseline = 'middle';
+            paperCtx.fillText(CONFIG.hankoSymbol, x + size / 2, y + size / 2 + size * 0.035);
+            paperCtx.restore();
+        }
+
+        // ── PARTICLE SYSTEM (Gravity-aware liquid spray) ─────────
+        class InkParticle {
+            constructor(x, y, vx, vy, radius, r, g, b) {
+                this.x = x;
+                this.y = y;
+                this.vx = vx;
+                this.vy = vy;
+                this.radius = radius;
+                this.r = r;
+                this.g = g;
+                this.b = b;
+                this.alpha = 0.9;
+                this.friction = 0.93;
+                this.decay = 0.003 + Math.random() * 0.008;
+                this.settled = false;
+            }
+
+            update() {
+                if (this.settled) return;
                 
-                if (showNodeTrails) {
-                    nodes.forEach((n, idx) => {
-                        if (n.history.length < 2) return;
-                        ctx.strokeStyle = nodeColors[idx % nodeColors.length];
-                        ctx.lineWidth = 1.8;
-                        ctx.globalAlpha = 0.6;
-                        ctx.beginPath();
-                        ctx.moveTo(n.history[0].x, n.history[0].y);
-                        n.history.forEach(h => ctx.lineTo(h.x, h.y));
-                        ctx.stroke();
-                        ctx.globalAlpha = 1;
-                    });
+                // Drift slightly in response to device orientation gravity vector!
+                this.vx += gravityX * CONFIG.gyroInfluence;
+                this.vy += gravityY * CONFIG.gyroInfluence;
+
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vx *= this.friction;
+                this.vy *= this.friction;
+                this.alpha -= this.decay;
+
+                if (this.alpha <= 0.03 || Math.hypot(this.vx, this.vy) < 0.05) {
+                    this.settled = true;
+                    // Stain the active water layer
+                    drawingCtx.save();
+                    drawingCtx.globalAlpha = Math.max(0.02, this.alpha * 0.7);
+                    drawingCtx.fillStyle = `rgba(${this.r},${this.g},${this.b},1)`;
+                    drawingCtx.beginPath();
+                    drawingCtx.arc(this.x, this.y, this.radius * (0.8 + Math.random() * 0.4), 0, Math.PI * 2);
+                    drawingCtx.fill();
+                    drawingCtx.restore();
                 }
             }
 
-            if (showBoxFill && nodes.length > 0) {
-                ctx.fillStyle = hexToRgba(config.boxColor, 0.22);
-                ctx.beginPath();
-                ctx.moveTo(nodes[0].x, nodes[0].y);
-                for (let i = 1; i < nodes.length; i++) ctx.lineTo(nodes[i].x, nodes[i].y);
-                ctx.closePath();
-                ctx.fill();
+            draw(targetCtx) {
+                if (this.settled) return;
+                targetCtx.fillStyle = `rgba(${this.r},${this.g},${this.b},${this.alpha})`;
+                targetCtx.beginPath();
+                targetCtx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                targetCtx.fill();
             }
-
-            constraints.forEach(c => {
-                const isEdge = c.type === 'edge';
-                ctx.strokeStyle = isEdge ? config.boxColor : hexToRgba(config.boxColor, 0.45);
-                ctx.lineWidth   = isEdge ? 4.2 : 2.2;
-                ctx.beginPath();
-                ctx.moveTo(c.n1.x, c.n1.y);
-                ctx.lineTo(c.n2.x, c.n2.y);
-                ctx.stroke();
-            });
-
-            if (grabbedNode) {
-                ctx.strokeStyle = '#ff7b7e';
-                ctx.lineWidth = 1.8;
-                ctx.setLineDash([6, 8]);
-                ctx.beginPath();
-                ctx.moveTo(grabbedNode.x, grabbedNode.y);
-                ctx.lineTo(mouse.x, mouse.y);
-                ctx.stroke();
-                ctx.setLineDash([]);
-            }
-
-            nodes.forEach((n, idx) => {
-                const isGrabbed = n === grabbedNode;
-                ctx.fillStyle   = isGrabbed ? '#ff6b7c' : nodeColors[idx % nodeColors.length];
-                ctx.shadowBlur  = isGrabbed ? 12 : 4;
-                ctx.shadowColor = ctx.fillStyle;
-                ctx.beginPath();
-                ctx.arc(n.x, n.y, isGrabbed ? 7 : 5.5, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.strokeStyle = config.boxColor;
-                ctx.lineWidth   = 2;
-                ctx.stroke();
-                ctx.beginPath();
-                ctx.arc(n.x, n.y, 2.2, 0, Math.PI * 2);
-                ctx.fillStyle = '#ffffffdd';
-                ctx.fill();
-            });
-            ctx.shadowBlur = 0;
         }
 
-        function animate() { updatePhysics(); draw(); requestAnimationFrame(animate); }
+        function triggerKineticSplatter(px, py, angle, speed) {
+            const scaleMod = 0.45;
+            const refSize = Math.min(140, speed * 10.0) * scaleMod;
+            const dropletCount = Math.floor(Math.min(45, speed * (2 + Math.random() * 2)));
+            const { r, g, b } = inkRgb;
 
-        // ── Input Mux ─────────────────────────────────────────────────
-        function getCanvasCoords(e) {
-            const rect = canvas.getBoundingClientRect();
-            const sx = canvas.width / rect.width;
-            const sy = canvas.height / rect.height;
+            for (let i = 0; i < dropletCount; i++) {
+                let u = 0, v = 0;
+                while (u === 0) u = Math.random();
+                while (v === 0) v = Math.random();
+                const gaussNoise = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+
+                const satAngle = angle + gaussNoise * 0.25;
+                const satVelocity = (speed * 0.4) + (Math.random() * speed * 0.5);
+                
+                // Inject structural gravity influence on initialization velocity
+                const vx = (Math.cos(satAngle) * satVelocity + gravityX * 4) * scaleMod;
+                const vy = (Math.sin(satAngle) * satVelocity + gravityY * 4) * scaleMod;
+                const sRadius = Math.max(0.4, Math.random() * refSize * 0.08);
+
+                particles.push(new InkParticle(px, py, vx, vy, sRadius, r, g, b));
+            }
+        }
+
+        // ── HYPER-SMOOTH BRUSH WITH TUNEABLE POOL LIMITS ──────────
+        function renderLinkSegment(p1, p2) {
+            const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y) || 1;
+            const dt = (p2.t - p1.t) || 1;
+            const currentSpd = dist / dt;
+
+            if (p1.spd === undefined) p1.spd = currentSpd;
+            p2.spd = currentSpd;
+
+            // This calculates the width and saturation dynamically based on movement speed
+            const getSpecs = (spd) => {
+                const range = CONFIG.maxBrushWidth - CONFIG.minBrushWidth;
+                // Eased inverse speed curve
+                const w = CONFIG.minBrushWidth + range / (1.0 + spd * 4.5);
+                const opacity = 0.15 + 0.75 / (1.0 + spd * 7.0);
+                return { w, opacity };
+            };
+
+            // High-precision spacing prevents stamp-overlap "bumpiness"
+            const stepDist = 0.8; 
+            const steps = Math.max(1, Math.floor(dist / stepDist));
+
+            for (let i = 0; i <= steps; i++) {
+                const t = i / steps;
+                const x = p1.x + (p2.x - p1.x) * t;
+                const y = p1.y + (p2.y - p1.y) * t;
+
+                const spd = p1.spd + (p2.spd - p1.spd) * t;
+                const { w, opacity } = getSpecs(spd);
+
+                drawingCtx.beginPath();
+                drawingCtx.arc(x, y, w, 0, Math.PI * 2);
+                drawingCtx.fillStyle = inkAt(opacity * 0.28); // Overlapping stamps blend smoothly
+                drawingCtx.fill();
+            }
+        }
+
+        // ── DYNAMIC SURFACE TENSION EVAPORATION ──────────────────
+        function applyEvaporation() {
+            drawingCtx.save();
+            // This composite operation slowly strips alpha away organically
+            drawingCtx.globalCompositeOperation = 'destination-out';
+            drawingCtx.fillStyle = `rgba(0, 0, 0, ${CONFIG.evaporationSpeed})`;
+            drawingCtx.fillRect(0, 0, drawingCanvas.width, drawingCanvas.height);
+            drawingCtx.restore();
+        }
+
+        // ── COMPOSITING & FLUID DYNAMICS ENGINE ──────────────────
+        function processInkBleedAndComposition() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 1. Draw Washi Stone base
+            ctx.drawImage(paperCanvas, 0, 0);
+
+            // 2. Compute dynamic fluid bleed layer (simulating porous absorption)
+            bleedCtx.clearRect(0, 0, bleedCanvas.width, bleedCanvas.height);
+            bleedCtx.save();
+            bleedCtx.filter = `blur(${CONFIG.bleedStrength}px)`;
+            bleedCtx.globalAlpha = CONFIG.bleedOpacity;
+            bleedCtx.drawImage(drawingCanvas, 0, 0);
+            bleedCtx.restore();
+
+            // 3. Blend dried + bleeding water together naturally using Multiply
+            ctx.globalCompositeOperation = 'multiply';
+            ctx.drawImage(bleedCanvas, 0, 0);
+            ctx.drawImage(drawingCanvas, 0, 0);
+            ctx.globalCompositeOperation = 'source-over';
+
+            // 4. Update and render airborne particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.update();
+                p.draw(ctx);
+                if (p.settled && p.alpha <= 0.02) {
+                    particles.splice(i, 1);
+                }
+            }
+
+            // 5. Render kinetic ripple ring
+            if (ripple) {
+                ctx.save();
+                ctx.strokeStyle = `rgba(${inkRgb.r},${inkRgb.g},${inkRgb.b},${ripple.opacity})`;
+                ctx.lineWidth = 0.8;
+                ctx.beginPath();
+                ctx.arc(ripple.x, ripple.y, ripple.radius, 0, Math.PI * 2);
+                ctx.stroke();
+                
+                // Kinetic drift of the ripple center in direction of device gravity
+                ripple.x += gravityX * 0.4;
+                ripple.y += gravityY * 0.4;
+                ripple.radius += 2.2;
+                ripple.opacity -= 0.015;
+                if (ripple.opacity <= 0) ripple = null;
+                ctx.restore();
+            }
+
+            // 6. Evaporate active water layers for next animation loop frame
+            applyEvaporation();
+        }
+
+        function step() {
+            processInkBleedAndComposition();
+            requestAnimationFrame(step);
+        }
+
+        // ── GYROSCOPIC TAPE INTEGRATION (Live Gravity Mapping) ────
+        if (window.DeviceOrientationEvent) {
+            window.addEventListener('deviceorientation', (e) => {
+                if (e.beta !== null && e.gamma !== null) {
+                    // Convert tilt angles (degrees) into physical pixel drift vectors
+                    gravityX = Math.min(2.5, Math.max(-2.5, e.gamma / 12));
+                    gravityY = Math.min(2.5, Math.max(-2.5, e.beta / 12));
+                }
+            }, true);
+        }
+
+        // ── POINTER HANDLERS ─────────────────────────────────────
+        function getPos(e) {
             const src = e.touches ? e.touches[0] : e;
-            return {
-                x: Math.min(width,  Math.max(0, (src.clientX - rect.left) * sx)),
-                y: Math.min(height, Math.max(0, (src.clientY - rect.top)  * sy))
-            };
+            return { x: src.clientX, y: src.clientY, t: Date.now() };
         }
 
-        function onPointerDown(e) {
-            if (e.target.closest && (e.target.closest('#control-panel') || e.target.closest('button'))) return;
+        function onStart(e) {
+            if (e.target !== canvas) return;
             e.preventDefault();
-            const { x, y } = getCanvasCoords(e);
-            mouse.x = x; mouse.y = y; mouse.isDown = true;
-            let closest = null, minD = 52;
-            nodes.forEach(n => { const d = Math.hypot(n.x - x, n.y - y); if (d < minD) { minD = d; closest = n; } });
-            grabbedNode = closest;
-            if (!grabbedNode) pokeAt(x, y);
-        }
-        function onPointerMove(e) {
-            if (!mouse.isDown || !grabbedNode) return;
-            e.preventDefault();
-            const { x, y } = getCanvasCoords(e);
-            mouse.x = x; mouse.y = y;
-            grabbedNode.x = x; grabbedNode.y = y;
-            grabbedNode.px = x; grabbedNode.py = y;
-        }
-        function onPointerUp() { grabbedNode = null; mouse.isDown = false; }
 
-        // ── DOM Bindings ──────────────────────────────────────────────
-        const presets = {
-            jelly:  { friction: 0.995, gravity: 0.40, edgeStiffness: 0.25, diagStiffness: 0.08, bounce: 0.80, subSteps: 40 },
-            rigid:  { friction: 0.990, gravity: 0.80, edgeStiffness: 1.20, diagStiffness: 1.00, bounce: 0.30, subSteps: 80 },
-            bouncy: { friction: 0.999, gravity: 0.90, edgeStiffness: 0.35, diagStiffness: 0.10, bounce: 1.60, subSteps: 50 },
-            floaty: { friction: 0.985, gravity: 0.05, edgeStiffness: 0.10, diagStiffness: 0.03, bounce: 0.40, subSteps: 30 }
-        };
-
-        function applyPreset(name) {
-            if (name === 'chaos') {
-                config.friction = 0.8 + Math.random() * 0.2;
-                config.gravity = -0.5 + Math.random() * 2.5;
-                config.edgeStiffness = -0.5 + Math.random() * 1.5;
-                config.diagStiffness = -0.5 + Math.random() * 1.5;
-                config.bounce = Math.random() * 2;
-                config.subSteps = 10 + Math.floor(Math.random() * 90);
-                config.nodeCount = 3 + Math.floor(Math.random() * 7);
-                syncSliders();
-                rebuildNodePalette();
-                initEntity();
-            } else {
-                const p = presets[name];
-                if (!p) return;
-                Object.assign(config, p);
-                syncSliders();
+            if (!hintGone) {
+                hint.classList.add('gone');
+                hintGone = true;
             }
-            saveState();
+            closeTray();
+
+            snapUndo();
+            drawing = true;
+            pts = [getPos(e)];
         }
 
-        function syncSliders() {
-            const map = [
-                ['nodes', config.nodeCount, v=>v],
-                ['radius', config.radius, v=>v],
-                ['friction', config.friction, v=>v.toFixed(3)],
-                ['gravity', config.gravity, v=>v.toFixed(2)],
-                ['edge', config.edgeStiffness, v=>v.toFixed(2)],
-                ['diag', config.diagStiffness, v=>v.toFixed(2)],
-                ['bounce', config.bounce, v=>v.toFixed(2)],
-                ['substeps', config.subSteps, v=>v]
-            ];
-            map.forEach(([key, val, fmt]) => {
-                const slider = document.getElementById(`${key}-slider`);
-                const disp = document.getElementById(`${key}-val`);
-                if (slider) slider.value = val;
-                if (disp) disp.innerText = fmt(val);
-            });
+        function onMove(e) {
+            if (!drawing) return;
+            e.preventDefault();
+            const p = getPos(e);
+            const last = pts[pts.length - 1];
+            const dist = Math.hypot(p.x - last.x, p.y - last.y);
+            if (dist < 1.0) return;
+            pts.push(p);
+            renderLinkSegment(last, p);
         }
 
-        function rebuildNodePalette() {
-            const palette = document.getElementById('node-palette');
-            palette.innerHTML = '';
-            
-            while(nodeColors.length < config.nodeCount) nodeColors.push(masterColors[nodeColors.length % masterColors.length]);
-            if(nodeColors.length > config.nodeCount) nodeColors.length = config.nodeCount;
-            
-            for (let i = 0; i < config.nodeCount; i++) {
-                const swatch = document.createElement('div');
-                swatch.className = 'node-swatch';
-                swatch.innerHTML = `<span>N${i}</span><input type="color" value="${nodeColors[i]}">`;
-                swatch.querySelector('input').addEventListener('input', e => {
-                    nodeColors[i] = e.target.value;
-                    saveState();
-                });
-                palette.appendChild(swatch);
+        function onEnd(e) {
+            if (!drawing) return;
+            drawing = false;
+            if (pts.length >= 3) maybeFlick();
+            pts = [];
+        }
+
+        // ── KINETIC FLICK DETECTION ──────────────────────────────
+        function maybeFlick() {
+            const last = pts[pts.length - 1];
+            const prev = pts[Math.max(0, pts.length - 8)];
+            const dx = last.x - prev.x;
+            const dy = last.y - prev.y;
+            const dt = (last.t - prev.t) || 1;
+            const spd = Math.hypot(dx, dy) / dt * 15;
+            const ang = Math.atan2(dy, dx);
+
+            if (spd > 1.2) {
+                triggerKineticSplatter(last.x, last.y, ang, spd);
+                ripple = {
+                    x: last.x,
+                    y: last.y,
+                    radius: 1.0,
+                    opacity: 0.6,
+                };
             }
         }
 
-        function bindUI() {
-            const bindSlider = (key, mapFn, callback) => {
-                document.getElementById(`${key}-slider`).addEventListener('input', e => {
-                    const val = mapFn(e.target.value);
-                    config[key === 'edge' ? 'edgeStiffness' : key === 'diag' ? 'diagStiffness' : key === 'nodes' ? 'nodeCount' : key] = val;
-                    document.getElementById(`${key}-val`).innerText = typeof val === 'number' && val % 1 !== 0 ? val.toFixed(key==='friction'?3:2) : val;
-                    if(callback) callback();
-                    saveState();
-                });
-            };
-
-            bindSlider('nodes', parseInt, () => { shapeLocked=false; rebuildNodePalette(); initEntity(); updateLockUI(); });
-            bindSlider('radius', parseInt, initEntity);
-            bindSlider('friction', parseFloat);
-            bindSlider('gravity', parseFloat);
-            bindSlider('edge', parseFloat);
-            bindSlider('diag', parseFloat);
-            bindSlider('bounce', parseFloat);
-            bindSlider('substeps', parseInt);
-
-            document.getElementById('box-color').addEventListener('input', e => { config.boxColor = e.target.value; saveState(); });
-            document.getElementById('trail-color').addEventListener('input', e => { config.trailColor = e.target.value; saveState(); });
-            document.getElementById('bg-color').addEventListener('input', e => { bgColor = e.target.value; saveState(); });
-
-            document.getElementById('global-node-color').addEventListener('input', e => { 
-                const val = e.target.value;
-                nodeColors = nodeColors.map(() => val);
-                rebuildNodePalette();
-                saveState();
-            });
-
-            document.getElementById('toggle-node-trails').addEventListener('change', e => { showNodeTrails = e.target.checked; saveState(); });
-            document.getElementById('toggle-box-trails').addEventListener('change', e => { showBoxTrails = e.target.checked; saveState(); });
-            document.getElementById('toggle-fill').addEventListener('change', e => { showBoxFill = e.target.checked; saveState(); });
-
-            const tailRange = document.getElementById('tail-range');
-            const tailNumber = document.getElementById('tail-number');
-            const updateTail = v => {
-                v = Math.max(0, Math.min(9999, v));
-                config.trailLength = v;
-                tailRange.value = v; tailNumber.value = v;
-                nodes.forEach(n => n.trimHistory());
-                saveState();
-            };
-            tailRange.addEventListener('input', e => updateTail(parseInt(e.target.value) || 0));
-            tailNumber.addEventListener('input', e => updateTail(parseInt(e.target.value) || 0));
-
-            document.getElementById('pause-btn').addEventListener('click', togglePause);
-            document.getElementById('lock-btn').addEventListener('click', lockShape);
-            document.getElementById('unlock-btn').addEventListener('click', unlockShape);
-            document.getElementById('reset-btn').addEventListener('click', () => { shapeLocked = false; nodes.forEach(n => n.history = []); initEntity(); });
-
-            document.querySelectorAll('.chip.preset').forEach(el => {
-                el.addEventListener('click', () => applyPreset(el.getAttribute('data-preset')));
-            });
+        // ── TRAY LOGIC ───────────────────────────────────────────
+        function openTray() {
+            clearTimeout(trayTimer);
+            tray.classList.add('visible');
+            trayOpen = true;
+            trayTimer = setTimeout(closeTray, 4000);
         }
 
-        function handleResize() {
-            const nw = container.clientWidth, nh = container.clientHeight;
-            if (nw === width && nh === height) return;
-            const dx = nw / 2 - width / 2, dy = nh / 2.6 - height / 2.6;
-            nodes.forEach(n => {
-                n.x += dx; n.y += dy; n.px += dx; n.py += dy;
-                n.history.forEach(h => { h.x += dx; h.y += dy; });
+        function closeTray() {
+            clearTimeout(trayTimer);
+            tray.classList.remove('visible');
+            trayOpen = false;
+        }
+
+        // Double-tap or double-click to open tray
+        let tapCount = 0, tapTimer = null;
+        canvas.addEventListener('touchstart', e => {
+            tapCount++;
+            clearTimeout(tapTimer);
+            tapTimer = setTimeout(() => { tapCount = 0; }, 320);
+            if (tapCount >= 2) { 
+                tapCount = 0;
+                openTray(); 
+            }
+        }, { passive: true });
+
+        canvas.addEventListener('dblclick', openTray);
+
+        // Swipe up from bottom edge
+        let touchStartY = 0;
+        canvas.addEventListener('touchstart', e => {
+            touchStartY = e.touches[0].clientY;
+        }, { passive: true });
+        canvas.addEventListener('touchend', e => {
+            const dy = touchStartY - e.changedTouches[0].clientY;
+            if (dy > 55 && touchStartY > window.innerHeight * 0.75) openTray();
+        }, { passive: true });
+
+        tray.addEventListener('pointerenter', () => clearTimeout(trayTimer));
+        tray.addEventListener('pointerleave', () => { trayTimer = setTimeout(closeTray, 2000); });
+
+        // ── SWATCH SELECTION ─────────────────────────────────────
+        document.querySelectorAll('#tray .swatch').forEach(sw => {
+            sw.addEventListener('click', () => {
+                setInkColor(sw.dataset.ink);
+                document.querySelectorAll('#tray .swatch').forEach(s => s.classList.remove('active'));
+                sw.classList.add('active');
+                clearTimeout(trayTimer);
+                trayTimer = setTimeout(closeTray, 8000);
             });
-            width = nw; height = nh;
-            canvas.width = width; canvas.height = height;
+        });
+
+        // ── BUTTON ACTIONS ───────────────────────────────────────
+        document.getElementById('btnUndo').addEventListener('click', () => {
+            performUndo();
+            clearTimeout(trayTimer);
+            trayTimer = setTimeout(closeTray, 8000);
+        });
+
+        document.getElementById('btnClear').addEventListener('click', () => {
+            snapUndo();
+            drawingCtx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
+            bleedCtx.clearRect(0, 0, bleedCanvas.width, bleedCanvas.height);
+            particles = [];
+            ripple = null;
+            generateWashiPaper();
+            closeTray();
+        });
+
+        document.getElementById('btnSave').addEventListener('click', () => {
+            const a = document.createElement('a');
+            a.download = 'living_water_stone_' + Date.now() + '.png';
+            a.href = canvas.toDataURL('image/png');
+            a.click();
+            clearTimeout(trayTimer);
+            trayTimer = setTimeout(closeTray, 8000);
+        });
+
+        // ── POINTER EVENTS ───────────────────────────────────────
+        canvas.addEventListener('mousedown', onStart);
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onEnd);
+        canvas.addEventListener('touchstart', onStart, { passive: false });
+        canvas.addEventListener('touchmove', onMove, { passive: false });
+        canvas.addEventListener('touchend', onEnd, { passive: false });
+
+        // ── SIZING & RESIZE ──────────────────────────────────────
+        function resize() {
+            const tempDrawing = document.createElement('canvas');
+            tempDrawing.width = drawingCanvas.width;
+            tempDrawing.height = drawingCanvas.height;
+            tempDrawing.getContext('2d').drawImage(drawingCanvas, 0, 0);
+
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+
+            setupBuffers();
+            generateWashiPaper();
+            drawingCtx.drawImage(tempDrawing, 0, 0);
         }
 
-        function setup() {
-            width  = container.clientWidth;
-            height = container.clientHeight;
-            canvas.width  = width;
-            canvas.height = height;
-            
-            loadState();
-            initEntity();
-            rebuildNodePalette();
-            syncSliders();
-            bindUI();
-            
-            document.getElementById('toggle-node-trails').checked = showNodeTrails;
-            document.getElementById('toggle-box-trails').checked = showBoxTrails;
-            document.getElementById('toggle-fill').checked   = showBoxFill;
-            document.getElementById('box-color').value = config.boxColor;
-            document.getElementById('trail-color').value = config.trailColor;
-            document.getElementById('bg-color').value = bgColor;
-            document.getElementById('tail-range').value = config.trailLength;
-            document.getElementById('tail-number').value = config.trailLength;
-            updateLockUI();
-            
-            window.addEventListener('resize', handleResize);
-            canvas.addEventListener('mousedown', onPointerDown);
-            window.addEventListener('mousemove', onPointerMove);
-            window.addEventListener('mouseup',   onPointerUp);
-            canvas.addEventListener('touchstart', onPointerDown, { passive: false });
-            window.addEventListener('touchmove',  onPointerMove, { passive: false });
-            window.addEventListener('touchend',   onPointerUp);
-            
-            animate();
+        // ── BOOTSTRAP ────────────────────────────────────────────
+        function init() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            setupBuffers();
+            generateWashiPaper();
+            requestAnimationFrame(step);
         }
 
-        setup();
-    })();
+        init();
+        window.addEventListener('resize', resize);
     </script>
 </body>
 </html>
