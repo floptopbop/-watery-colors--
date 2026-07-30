@@ -29,14 +29,12 @@
   }
   #tray.visible { transform:translateY(0); opacity:1; }
 
-  /* grab handle */
   #grab {
     position:absolute; top:5px; left:50%; transform:translateX(-50%);
     width:38px; height:4px; border-radius:2px;
     background:rgba(255,255,255,0.22);
   }
 
-  /* swatch strip — clustered left, over the ink column */
   #swatchRow {
     display:flex; gap:7px; overflow-x:auto; padding:2px 0 1px;
     -webkit-overflow-scrolling:touch; scrollbar-width:none;
@@ -53,10 +51,8 @@
     box-shadow:0 0 12px rgba(255,255,255,0.18);
   }
 
-  /* divider between colours and brush sizes */
   .rowDiv { width:1px; align-self:stretch; margin:2px 5px; background:rgba(255,255,255,0.14); flex-shrink:0; }
 
-  /* brush-size dots, — inner circle hints the size */
   .size {
     width:30px; height:30px; border-radius:50%; flex-shrink:0;
     display:flex; align-items:center; justify-content:center;
@@ -67,7 +63,6 @@
   .size.active { border-color:rgba(255,255,255,0.85); transform:scale(1.12); }
   .size.active i { background:rgba(255,255,255,0.92); }
 
-  /* clear/reset — sits at the end of the brush row, warm ring so it reads as an action */
   #resetBtn {
     width:30px; height:30px; border-radius:50%; flex-shrink:0;
     display:flex; align-items:center; justify-content:center;
@@ -79,7 +74,6 @@
   }
   #resetBtn:active { transform:scale(0.9); background:rgba(120,58,48,0.34); border-color:rgba(216,138,118,0.85); }
 
-  /* the three columns: ink · napkin · water */
   #dipRow { display:flex; gap:8px; height:70px; }
   .dip, #napkin {
     flex:1; border-radius:7px; position:relative; overflow:hidden;
@@ -96,18 +90,73 @@
   #dipInk   { background:#141210; color:#eee; }
   #dipWater { background:#2e5d8a; color:#eaf2fa; }
 
-  /* napkin — three drain zones (ink · both · water) */
   #napkin { background:#e8e4d8; color:#5a5348; }
   .napZones { position:absolute; inset:0; display:flex; z-index:1; }
   .napZone { flex:1; touch-action:none; }
   .napZone.mid { border-left:1px solid rgba(90,83,72,0.18); border-right:1px solid rgba(90,83,72,0.18); }
   .napZone.pressed { background:rgba(90,83,72,0.16); }
   #napkin .napLabel { font-size:0.5rem; opacity:0.6; letter-spacing:0.14em; }
+
+  /* ── reference image overlay ── */
+  #refOverlay {
+    position:fixed; inset:0; width:100%; height:100%;
+    object-fit:contain; pointer-events:none;
+    opacity:0; display:none; z-index:5;
+  }
+  #refRow { display:flex; align-items:center; gap:9px; height:30px; }
+  #refPick {
+    flex:0 0 auto; padding:0 11px; height:30px; border-radius:15px;
+    display:flex; align-items:center; justify-content:center;
+    border:2px solid rgba(255,255,255,0.14); color:rgba(255,255,255,0.62);
+    font-family:'Courier New', monospace; font-size:0.56rem;
+    letter-spacing:0.1em; text-transform:uppercase;
+    transition:transform 0.16s, border-color 0.16s, color 0.16s;
+    touch-action:none; -webkit-user-select:none; user-select:none;
+  }
+  #refPick.active { border-color:rgba(255,255,255,0.7); color:rgba(255,255,255,0.92); }
+  #refPick:active { transform:scale(0.94); }
+
+  #refOpacity {
+    flex:1; -webkit-appearance:none; appearance:none;
+    height:3px; border-radius:2px; background:rgba(255,255,255,0.18);
+    outline:none; touch-action:none;
+  }
+  #refOpacity::-webkit-slider-thumb {
+    -webkit-appearance:none; appearance:none;
+    width:16px; height:16px; border-radius:50%;
+    background:rgba(255,255,255,0.85);
+  }
+  #refOpacity::-moz-range-thumb {
+    width:16px; height:16px; border-radius:50%;
+    background:rgba(255,255,255,0.85); border:none;
+  }
+
+  #refClear {
+    flex:0 0 30px; width:30px; height:30px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    border:2px solid rgba(216,138,118,0.4); color:rgba(242,204,194,0.7);
+    font-size:13px; line-height:1;
+    transition:transform 0.16s, border-color 0.16s, background 0.16s;
+    touch-action:none; -webkit-user-select:none; user-select:none;
+  }
+  #refClear:active { transform:scale(0.9); background:rgba(120,58,48,0.24); border-color:rgba(216,138,118,0.75); }
+
+  /* ── touch readout ── which signal your device is actually giving ── */
+  #tel {
+    position:fixed; top:calc(8px + env(safe-area-inset-top)); left:11px;
+    font-family:'Courier New', monospace;
+    font-size:9px; letter-spacing:0.12em;
+    color:rgba(60,52,44,0.34);
+    pointer-events:none; white-space:pre; z-index:9;
+    opacity:0; transition:opacity 0.8s ease;
+  }
+  #tel.on { opacity:1; transition:opacity 0.12s ease; }
 </style>
 </head>
 <body>
 
 <canvas id="c"></canvas>
+<img id="refOverlay" alt="">
 
 <div id="tray">
   <div id="grab"></div>
@@ -139,6 +188,13 @@
     </div>
     <div class="dip" id="dipWater"><div class="fill"></div><span>water</span></div>
   </div>
+
+  <div id="refRow">
+    <div id="refPick">+ ref</div>
+    <input type="range" id="refOpacity" min="0" max="100" value="55">
+    <div id="refClear">✕</div>
+  </div>
+  <input type="file" id="refFile" accept="image/*" style="display:none">
 </div>
 
 <script>
@@ -146,109 +202,252 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ═══════════════════════════════════════════════════════════════
-// MODEL
-//   The brush is split into THREE independent things:
-//     1. water it lays down   (waterLoad -> adds sat)
-//     2. pigment it lays down  (inkLoad  -> adds pig)
-//     3. physical agitation    (motion/press -> adds VELOCITY to water)
-//   (3) is always on. A bone-dry brush (water=0, ink=0) still shoves any
-//   water it's dragged through, so it makes currents and smears live ink
-//   instead of going inert. Currents only exist where there's water —
-//   dry paper can't be disturbed, which is correct.
+// MODEL — the brush is three independent things: water it lays down,
+// pigment it lays down, and physical agitation. Agitation is always on,
+// so a bone-dry brush still shoves water it's dragged through (dry paper
+// can't be disturbed — correct). Per wet cell: sat (water), pig (pigment),
+// vx/vy (velocity). absorbed[] is the permanent one-way stain.
+// Each frame: pressure diffusion (blooms, leveling) -> advection (currents,
+// smearing) -> evaporation + absorption (drying, staining). The field draws
+// to a grid-res buffer that's bilinear-upscaled — smooth ramps, no pixel grid.
 //
-//   Per wet cell:  sat (live water), pig (live pigment), vx/vy (water velocity).
-//   absorbed[]     a persistent per-cell stain, ratcheted one-way into the paper.
-//   Three forces on the water each frame:
-//     - pressure diffusion (water seeks its own level)  -> blooms, leveling
-//     - advection by velocity (the brush push)          -> currents, smearing
-//     - evaporation + absorption                        -> drying, staining
-//
-//   RENDER: the field is drawn to a tiny grid-resolution buffer and then
-//   bilinear-upscaled to the screen. That's what kills the pixel-grid look —
-//   smooth ramps between cells instead of hard squares — and it's cheaper
-//   than the old thousands-of-fillRects approach.
+// [B] marks values grounded in Baron, D.E., "Fluid Dynamics of Watercolor
+// Painting: Experiments and Modelling" (M.S. thesis, Montclair State, 2017).
+// Tuning changes from the previous build are listed at TUNING NOTES below.
 // ═══════════════════════════════════════════════════════════════
 
-const fract = x => x - Math.floor(x);
-const dU = (a,b) => fract(Math.sin(a*127.1 + b*311.7) * 43758.5453123);
-const dG = (a,b) => (dU(a,b) + dU(a+1.7, b+0.3) + dU(a+3.1, b+2.9) - 1.5) * 1.15; // ~gaussian scatter
-
 // ── grid ──
-const CELL = 2;
-const EPS  = 0.0001;
+const CELL = 3;
+const EPS  = 0;
 
-// ── pressure diffusion (water leveling) ──
-const FLOW           = 0.9929;    // base spread rate (was brush-driven; now a paper constant)
-const DIFF_COEF      = 0.2;   // per-edge coefficient — keep <=0.25 for stability
-const EDGE_SUB       = 1;      // micro-channels per shared edge (grain anisotropy)
-const RELAX_SUBSTEPS = 1;      // conservative sub-iterations per frame
-const CRUST_RESIST   = 0.4;
+// ── pressure diffusion ──
+const FLOW           = .68;
+const DIFF_COEF      = 0.05;
+// paper grain runs along a local fiber direction (see fiberBiasH, built in
+// setupGrid from the same low-frequency field the paper texture uses) —
+// bleed travels faster with the grain than across it, same as real washi.
+const FIBER_ANISO    = 0.35;
 
-// ── brush as physical force (advection) ──
-const FORCE     = .998;   // how hard motion shoves water (per unit brush speed)
-const WATER_DRIVE_MIN = 0.9;  // dry brush barely pushes; water in the brush drives the flow
-const PRESS_FORCE = 32.0;  // one-shot radial shove when you press down (a bloom)
-const HOLD_PRESS  = 34.0;  // radial shove per second while held stationary
-const VDAMP     = .04;    // velocity decay /sec  (currents fade in ~0.4s)
-const VMAX      = 14;     // max water speed, cells/sec (stability cap)
-const VEPS      = 0.001;   // velocities below this snap to 0
-const ADV_CFL   = 0.2;   // max fraction of a cell moved per axis per frame (CFL safety)
-const MOM_CARRY = 0.8;    // how much a current carries its momentum downstream (0..1)
+// ── pigment rheology ──
+const VISC_MAX    = 0.68;   // ← was 0.62
+const VISC_CONC   = .05;
+const FILM_REF    = .8;
+const FILM_DRAG   = 0.9;   // ← was 0.75
 
-// ── brush loads: WATER and INK are separate, and drain as you paint ──
-let waterLoad = 0.2;     // 0 = bone dry (no water laid), 1 = soaked
-let inkLoad   = 1;     // 0 = no pigment,               1 = fully charged
-const LOAD_MAX  = 5;    // deposit strength at full load
-const DAB       = 0.15;   // overall deposit scale
-const INK_FLOOR = .25;    // pigment lays down solid even with a near-dry brush
-const DEPLETE   = false;   // <-- set false for the old "infinite load" feel
-const WATER_USE = 0.06;   // water drain per unit water laid
-const INK_USE   = 0.11;   // ink drains faster -> strokes fade pale, then clear, then just agitate
-const RAMP_PER_SEC = 0.6; // dip-bar load/unload speed
+// ── finger instability ──
+const FINGER_GAIN    = 2.8; // ← was 2.1
+const EDGE_SUB       = 3;
+const RELAX_SUBSTEPS = 0;
+const CRUST_RESIST   = 0.5;
 
-// ── absorption / staining (one-way ratchet) ──
-const DRY_SECONDS       = 6;
-const ABSORB_SAT_THRESH = 0.98;
-const ABSORB_RATE       = 0.05;
-const MAX_LIVE_CONC     = .95;
-const MAX_ABSORBED      = .98;
+// ── brush force ──
+const FORCE           = .68;
+const WATER_DRIVE_MIN = .2;
+const PRESS_FORCE     = .99;
+const HOLD_PRESS      = 2;
+const VDAMP           = .9;
+const VMAX            = 28;
+const VEPS            = 0.9;
+const ADV_CFL         = 0.3;
+const MOM_CARRY       = 0.9;
+
+// ── loads ──
+let waterLoad = .8;
+let inkLoad   = .94;
+const LOAD_MAX  = 1;
+const DAB       = 0.99;
+const INK_FLOOR = .01;
+const DEPLETE   = true;
+const WATER_USE = 0.0000001;
+const INK_USE   = 0.000002;
+const RAMP_PER_SEC = 5;
+
+// ── absorption / staining ──
+const DRY_SECONDS       = 4;   // ← was 8
+const ABSORB_SAT_THRESH = 0.15;  // ← was 0.2
+const ABSORB_RATE       = 0.88;  // ← was 0.2
+const MAX_LIVE_CONC     = 1.3;
+const MAX_ABSORBED      = .99;
 const BAKE_AFTER_MS     = 6000;
 
 // ── brush geometry ──
-let BRUSH_R = 16;   // active brush radius (px) — set by the size picker
+// BRUSH_R is now the *base* size the tray buttons pick. The touch modulates
+// around it — see PCFG. Previously the move width was Math.max(BRUSH_R*2,
+// BRUSH_R/(1+smoothSpd)), where the second term can never exceed the first
+// for any spd >= 0, so the brush was flatly BRUSH_R*2 the whole time.
+let BRUSH_R = 8;
 
-// ── splatter (flick the brush to throw droplets — each is a normal deposit) ──
-const SPLAT_FLICK_MIN = 0.7;   // px/ms lift-off speed needed to throw anything
-const SPLAT_COUNT     = 14;    // droplets per px/ms of flick speed
-const SPLAT_CAP       = 34;    // most droplets one flick can throw
-const SPLAT_SPREAD    = 0.42;  // angular scatter (radians) around the flick direction
-const SPLAT_REACH     = 70;    // px of throw distance per px/ms of flick
-const SPLAT_REACH_MAX = 340;   // px cap on how far droplets fly
-const SPLAT_DROP_R    = 7;     // biggest droplet radius (px)
-const SPLAT_MIN_R     = 1.2;   // smallest droplet radius (px)
-const SPLAT_STRENGTH  = 0.5;   // deposit strength per droplet (feeds the same DAB math)
-const SPLAT_SMEAR     = 0.6;   // how hard droplets streak along the flick (0 = plops, 1 = long smears)
+// ── brush pressure (ported from sumi-e) ──
+// Two signals, in order of trust:
+//   1. real force — Pencil, or 3D Touch era iPhones. t.force in (0,1).
+//   2. contact patch — t.radiusX/radiusY. Press a finger harder and the pad
+//      flattens, so the reported patch grows. This works on every current
+//      iPhone and is the one that'll actually be carrying the feel.
+// When neither is available, pressure falls back to being read off speed:
+// a slow drag is leaning in, a fast flick is barely grazing.
+const PCFG = {
+  wLo: 0.55,            // BRUSH_R multiplier at feather-touch
+  wHi: 2.6,             // BRUSH_R multiplier at full press (old flat width was 2.0)
+  wCap: 2.9,            // hard ceiling on that multiplier, incl. contact — perf guard
+  pressGamma: 0.85,     // pressure → width curve (<1 is generous at the light end)
+
+  contactRef: 40,       // touch-patch px that reads as a "normal" finger
+  contactMin: 0.5, contactMax: 1.9,
+
+  touchSmooth: 0.45,    // low-pass on pressure/contact — silkier vs snappier
+  fallbackSpeedK: 22,   // no force hardware: slow = heavy press
+
+  // pressure also drives how much load lands, but ONLY when there's real
+  // force hardware — without it, pressure is already speed-derived and sMul
+  // is speed-derived too, so applying both would double-count speed
+  inkGamma: 0.5,
+  sMulLo: 0.45, sMulHi: 1.5,
+};
+
+// ── splatter ──
+const SPLAT_FLICK_MIN = 3;
+const SPLAT_COUNT     = 12;
+const SPLAT_CAP       = 24;
+const SPLAT_SPREAD    = 0.32;
+const SPLAT_REACH     = 50;
+const SPLAT_REACH_MAX = 340;
+const SPLAT_DROP_R    = 12;
+const SPLAT_MIN_R     = 1.2;
+const SPLAT_STRENGTH  = 1;
+const SPLAT_SMEAR     = 1;
 
 // ── render ──
 const PAPER       = [242, 238, 229];
-const K_INK       = 4.2;   // Beer–Lambert pigment darkening (higher = richer blacks)
-const WET_SHEEN   = 0.1;  // wet paper reads darker -> lets you SEE clear-water currents
-const GRANULATE   = 0.02;  // dried-stain mottling
-const PAPER_GRAIN = 0.01;  // faint paper tone variation
-let   SOFTEN      = 1.4;   // upscale blur, set from dpr on resize
+const K_INK       = .92;
+const WET_SHEEN   = 0.1;
+const GRANULATE   = 0.02;
+const PAPER_GRAIN = 0.01;
+let   SOFTEN      = 1;
+
+// ── TUNING NOTES (changes from the previous build) ─────────────
+//   waterLoad  5    -> 0.2   was 25x its own "1 = soaked" max, and unlike
+//                            pigment it has no downstream clamp
+//   VDAMP      .001 -> 4     currents never decayed (~1000s e-folding time),
+//                            which also kept cells from ever going idle
+//   VEPS       0.25 -> 0.01  was clipping slow settling water to zero
+//   ADV_CFL    0.1  -> 0.9   throttle that compensated for the VDAMP bug
+//   FINGER_GAIN 1.8 -> 2.1   old comment cited D_f 1.43-1.73; thesis actually
+//                            reports ~1.6-1.9 measured, 1.73-1.97 modelled
+// ───────────────────────────────────────────────────────────────
+
+// exp LUT
+const EXP_N = 1024, EXP_MAX = 2, EXP_SCALE = EXP_N / EXP_MAX;
+const EXP_LUT = new Float32Array(EXP_N);
+function buildExpLut() { for (let i = 0; i < EXP_N; i++) EXP_LUT[i] = 1 - Math.exp(-K_INK * (i / EXP_SCALE)); }
+buildExpLut();
+function expA(T) { if (T <= 0) return 0; const idx = T * EXP_SCALE; return idx >= EXP_N - 1 ? EXP_LUT[EXP_N - 1] : EXP_LUT[idx | 0]; }
+
+const fract = x => x - Math.floor(x);
+const dU = (a,b) => fract(Math.sin(a*127.1 + b*311.7) * 43758.5453123);
+const dG = (a,b) => (dU(a,b) + dU(a+1.7, b+0.3) + dU(a+3.1, b+2.9) - 1.5) * 1.15;
+const dS = (a,b) => dU(a,b) * 2 - 1;
+const R2A = 0.7548776662466927, R2B = 0.5698402909980532;
+const GOLD = Math.PI * (3 - Math.sqrt(5));
+// dominant sheet grain direction — real paper mostly runs one way (the
+// machine/felting direction) with local wander, not a fresh angle per cell
+const FIBER_BASE_ANGLE = GOLD * 3;
 
 // ── state ──
 let gridW = 0, gridH = 0;
 let cells = new Map();
-let absorbed = null;                 // Float32Array — persistent stain per cell
-let grainTex = null;                 // Float32Array — static paper/granulation texture
-let field, fieldCtx, fieldImg;       // tiny grid-res buffer that we upscale
-let dpr = 1;
-
-// ── colour (a passenger on the pigment; never affects the physics numbers) ──
-// current brush ink, and a per-cell stain colour that rides along with absorbed[]
-let inkR = 0x29, inkG = 0x24, inkB = 0x20;      // default = sumi (#292420)
+let absorbed = null;
+let grainTex = null;
+let fiberBiasH = null;
 let absColR = null, absColG = null, absColB = null;
+let field, fieldCtx, fieldImg;
+let dpr = 1;
+let needFullPaint = true;
+
+// ── washi paper backdrop (drawn once per resize, sits BEHIND the field
+// canvas — real fiber/mote texture instead of a flat colour + per-pixel
+// grain multiplier) ──
+const paperCanvas = document.createElement('canvas');
+const paperCtx = paperCanvas.getContext('2d');
+
+function generateWashiPaper(w, h) {
+  paperCanvas.width = w; paperCanvas.height = h;
+  paperCtx.clearRect(0, 0, w, h);
+  paperCtx.fillStyle = `rgb(${PAPER[0]},${PAPER[1]},${PAPER[2]})`;
+  paperCtx.fillRect(0, 0, w, h);
+
+  const area = w * h;
+
+  // fibres — R2 low-discrepancy scatter, golden-angle orientation, short
+  // straight hairs (this is the same paper the wash engine was tuned against)
+  const fiberCount = Math.floor(area / 3000);
+  paperCtx.strokeStyle = 'rgba(60, 50, 40, 0.012)';
+  for (let i = 1; i <= fiberCount; i++) {
+    const x = fract(i * R2A) * w;
+    const y = fract(i * R2B) * h;
+    const ang = i * GOLD;
+    const len = 2 + dU(i, 7.3) * 12;
+    paperCtx.lineWidth = 0.05 + dU(i, 11.1) * 0.15;
+    paperCtx.beginPath();
+    paperCtx.moveTo(x, y);
+    paperCtx.lineTo(x + Math.cos(ang) * len, y + Math.sin(ang) * len);
+    paperCtx.stroke();
+  }
+
+  // motes — a second R2 lane
+  const moteCount = Math.floor(area / 600);
+  paperCtx.fillStyle = 'rgba(120, 105, 85, 0.015)';
+  for (let i = 1; i <= moteCount; i++) {
+    const rx = fract((i + 0.5) * R2A) * w;
+    const ry = fract((i + 0.5) * R2B) * h;
+    paperCtx.beginPath();
+    paperCtx.arc(rx, ry, dU(i, 5.5) * 1.5, 0, Math.PI * 2);
+    paperCtx.fill();
+  }
+
+  // velvet vignetting
+  const grad = paperCtx.createRadialGradient(
+    w / 2, h / 2, Math.min(w, h) * 0.25,
+    w / 2, h / 2, Math.max(w, h) * 0.65);
+  grad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+  grad.addColorStop(1, 'rgba(165, 155, 140, 0.15)');
+  paperCtx.fillStyle = grad;
+  paperCtx.fillRect(0, 0, w, h);
+
+  drawDeckleEdge(w, h);
+}
+
+// deckle edge — the slightly heavier, torn-looking border a hand-formed
+// sheet gets from the mould's frame. Four edge-hugging linear gradients;
+// corners double up naturally, which is exactly how a real deckle reads.
+function drawDeckleEdge(w, h) {
+  const depth = Math.min(w, h) * 0.035;
+  const col = 'rgba(120, 100, 80,';
+  const edgeGrad = (x0, y0, x1, y1) => {
+    const g = paperCtx.createLinearGradient(x0, y0, x1, y1);
+    g.addColorStop(0, col + ' 0.22)');
+    g.addColorStop(1, col + ' 0)');
+    return g;
+  };
+  paperCtx.fillStyle = edgeGrad(0, 0, depth, 0);       paperCtx.fillRect(0, 0, depth, h);
+  paperCtx.fillStyle = edgeGrad(w, 0, w - depth, 0);   paperCtx.fillRect(w - depth, 0, depth, h);
+  paperCtx.fillStyle = edgeGrad(0, 0, 0, depth);       paperCtx.fillRect(0, 0, w, depth);
+  paperCtx.fillStyle = edgeGrad(0, h, 0, h - depth);   paperCtx.fillRect(0, h - depth, w, depth);
+}
+
+// Pre-allocated delta pools — diffuse/advect write here instead of allocating
+// a Map every frame. O(changed_cells) readback, zero GC churn.
+let _deltaS  = null;   // Float32Array[gridW*gridH]
+let _deltaP  = null;
+let _deltaVX = null;
+let _deltaVY = null;
+let _deltaVW = null;   // weight accumulator for momentum blend
+let _dirtyList = [];   // flat list of indices touched this frame — zeroed after use
+
+// colour delta accumulators (reused per frame, same pattern)
+let _colR = null, _colG = null, _colB = null, _colW = null;
+
+// ── ink colour ──
+let inkR = 0x29, inkG = 0x24, inkB = 0x20;
 
 function setInk(hex) {
   inkR = parseInt(hex.slice(1,3),16);
@@ -256,7 +455,6 @@ function setInk(hex) {
   inkB = parseInt(hex.slice(5,7),16);
 }
 
-// blend a live cell's pigment colour toward (r,g,b) as `amt` new pigment arrives
 function blendCellColor(c, r, g, b, amt, prevPig) {
   const next = prevPig + amt;
   if (next <= 1e-9) return;
@@ -264,7 +462,6 @@ function blendCellColor(c, r, g, b, amt, prevPig) {
   c.ir = c.ir*iw + r*w; c.ig = c.ig*iw + g*w; c.ib = c.ib*iw + b*w;
 }
 
-// ratchet `amt` pigment of colour (r,g,b) into the permanent stain at cell i
 function addStain(i, r, g, b, amt) {
   if (amt <= 0) return;
   const prev = absorbed[i], next = prev + amt;
@@ -275,10 +472,10 @@ function addStain(i, r, g, b, amt) {
   absorbed[i] = next;
 }
 
-function key(cx, cy) { return cx + ',' + cy; }
+function key(cx, cy) { return cy * gridW + cx; }
 function idxOf(cx, cy) { return cy * gridW + cx; }
 function clampVel(c) {
-  const m = Math.hypot(c.vx, c.vy);
+  const m = Math.sqrt(c.vx*c.vx + c.vy*c.vy);
   if (m > VMAX) { const s = VMAX / m; c.vx *= s; c.vy *= s; }
 }
 
@@ -304,62 +501,106 @@ function markDirty(cx, cy) {
   if (cx > dirtyX1) dirtyX1 = Math.min(gridW - 1, cx);
   if (cy > dirtyY1) dirtyY1 = Math.min(gridH - 1, cy);
 }
-
-function resetDirty() {
-  dirtyX0 = gridW; dirtyY0 = gridH;
-  dirtyX1 = -1;    dirtyY1 = -1;
-}
-
+function resetDirty() { dirtyX0 = gridW; dirtyY0 = gridH; dirtyX1 = -1; dirtyY1 = -1; }
+function markDirtyIdx(i) { markDirty(i % gridW, (i / gridW) | 0); }
 
 function setupGrid(cssW, cssH) {
   gridW = Math.max(1, Math.ceil(cssW / CELL));
   gridH = Math.max(1, Math.ceil(cssH / CELL));
   cells.clear();
-  absorbed = new Float32Array(gridW * gridH);
-  absColR  = new Float32Array(gridW * gridH);
-  absColG  = new Float32Array(gridW * gridH);
-  absColB  = new Float32Array(gridW * gridH);
-  grainTex = new Float32Array(gridW * gridH);
-  for (let y = 0; y < gridH; y++)
-    for (let x = 0; x < gridW; x++)
-      grainTex[y*gridW + x] = dU(x*1.7 + 3.3, y*2.3 + 9.1);
+  const n = gridW * gridH;
+  absorbed = new Float32Array(n);
+  absColR  = new Float32Array(n);
+  absColG  = new Float32Array(n);
+  absColB  = new Float32Array(n);
+  grainTex = new Float32Array(n);
+  fiberBiasH = new Float32Array(n);
+  // pre-alloc delta pools
+  _deltaS  = new Float32Array(n);
+  _deltaP  = new Float32Array(n);
+  _deltaVX = new Float32Array(n);
+  _deltaVY = new Float32Array(n);
+  _deltaVW = new Float32Array(n);
+  _colR = new Float32Array(n); _colG = new Float32Array(n);
+  _colB = new Float32Array(n); _colW = new Float32Array(n);
+  _dirtyList = [];
+
+  buildGrainFromPaper();
+
+  for (let y = 0; y < gridH; y++) {
+    for (let x = 0; x < gridW; x++) {
+      const nx = x / gridW, ny = y / gridH;
+      // low-frequency wobble around one dominant direction — coherent grain
+      // drift across the sheet, not a fresh random angle per cell
+      const wobble = Math.sin(nx*4.7 + ny*2.1) * 0.35 + Math.sin(nx*1.3 - ny*3.6 + 1.7) * 0.25;
+      const angle = FIBER_BASE_ANGLE + wobble;
+      fiberBiasH[y*gridW + x] = Math.cos(2 * angle);
+    }
+  }
+
   field = document.createElement('canvas');
   field.width = gridW; field.height = gridH;
   fieldCtx = field.getContext('2d');
   fieldImg = fieldCtx.createImageData(gridW, gridH);
+  needFullPaint = true;
 }
 
-// ═══════════════ DEPOSIT (lay water + pigment; drains the loads) ═══════════════
+// grain used to be an independent hash, decorrelated from the fibers you can
+// actually see. Sample the real paper canvas instead (one getImageData call,
+// grid-resolution readback) so pigment granulation follows the same texture.
+function buildGrainFromPaper() {
+  const pw = paperCanvas.width, ph = paperCanvas.height;
+  if (pw < 1 || ph < 1) { grainTex.fill(0.5); return; }
+  const px = paperCtx.getImageData(0, 0, pw, ph).data;
+  let lo = Infinity, hi = -Infinity;
+  const lum = new Float32Array(gridW * gridH);
+  for (let y = 0; y < gridH; y++) {
+    const sy = Math.min(ph - 1, Math.round((y + 0.5) * CELL * dpr));
+    for (let x = 0; x < gridW; x++) {
+      const sx = Math.min(pw - 1, Math.round((x + 0.5) * CELL * dpr));
+      const o = (sy * pw + sx) * 4;
+      const l = (px[o]*0.299 + px[o+1]*0.587 + px[o+2]*0.114) / 255;
+      const i = y*gridW + x;
+      lum[i] = l;
+      if (l < lo) lo = l; if (l > hi) hi = l;
+    }
+  }
+  const span = Math.max(1e-4, hi - lo);
+  for (let i = 0; i < lum.length; i++) grainTex[i] = (lum[i] - lo) / span;
+}
+
+// ═══ DEPOSIT ═══
 function deposit(px, py, radius, sMul) {
-  if (waterLoad <= 0 && inkLoad <= 0) return;   // nothing to lay (force is handled elsewhere)
+  if (waterLoad <= 0 && inkLoad <= 0) return;
   const wDab = LOAD_MAX * waterLoad;
-  // ink marks on its own — pigment doesn't need water to lay down a solid line
   const iDab = (INK_FLOOR + (LOAD_MAX - INK_FLOOR) * inkLoad);
   const rCells = Math.max(1, Math.ceil(radius / CELL)) + 1;
   const cx0 = Math.floor(px/CELL - rCells), cx1 = Math.ceil(px/CELL + rCells);
   const cy0 = Math.floor(py/CELL - rCells), cy1 = Math.ceil(py/CELL + rCells);
   let usedW = 0, usedI = 0;
+  const now = performance.now();
+  const rMax2 = (radius + CELL) * (radius + CELL), rFall = radius + CELL * 0.5;
 
   for (let cy = cy0; cy <= cy1; cy++) {
     for (let cx = cx0; cx <= cx1; cx++) {
       if (cx < 0 || cy < 0 || cx >= gridW || cy >= gridH) continue;
-      const wcx = (cx + 0.5) * CELL, wcy = (cy + 0.5) * CELL;
-      const d = Math.hypot(wcx - px, wcy - py);
-      if (d > radius + CELL) continue;
-      const f = Math.max(0, 1 - d / (radius + CELL * 0.5));
+      const dx = (cx + 0.5) * CELL - px, dy = (cy + 0.5) * CELL - py;
+      const d2 = dx*dx + dy*dy;
+      if (d2 > rMax2) continue;
+      const d = Math.sqrt(d2);
+      const f = Math.max(0, 1 - d / rFall);
       if (f <= 0) continue;
       const ff = f * f;
       const addS = wDab * sMul * ff * DAB;
       const addP = iDab * sMul * ff * DAB;
-      if (addS < 0.0002 && addP < 0.0002) continue;
+      if (addS < 0.0002 && addP < 0.2) continue;
 
       const c = getCell(cx, cy, true);
       const prevPig = c.pig;
-      c.sat += addS; c.pig += addP; c.lastActive = performance.now();
-      blendCellColor(c, inkR, inkG, inkB, addP, prevPig);   // colour follows the ink
+      c.sat += addS; c.pig += addP; c.lastActive = now;
+      blendCellColor(c, inkR, inkG, inkB, addP, prevPig);
       usedW += addS; usedI += addP;
 
-      // live concentration cap — overflow stains immediately (dry-ish pigment)
       const conc = c.sat > EPS ? c.pig / c.sat : 0;
       if (conc > MAX_LIVE_CONC) {
         const capped = MAX_LIVE_CONC * c.sat, excess = c.pig - capped;
@@ -369,34 +610,7 @@ function deposit(px, py, radius, sMul) {
       }
     }
   }
-
-function render() {
-  if (dirtyX1 < dirtyX0 || dirtyY1 < dirtyY0) return; // Nothing changed
-
-  // Expand bounding box by 1 cell to account for blur/smoothing edges
-  const x0 = Math.max(0, dirtyX0 - 1);
-  const y0 = Math.max(0, dirtyY0 - 1);
-  const x1 = Math.min(gridW - 1, dirtyX1 + 1);
-  const y1 = Math.min(gridH - 1, dirtyY1 + 1);
-
-  const data = fieldImg.data;
-
-  for (let y = y0; y <= y1; y++) {
-    for (let x = x0; x <= x1; x++) {
-      const i = y * gridW + x;
-      // Perform pixel shading only for dirty cells...
-    }
-  }
-
-  // Only upload the modified sub-rectangle
-  const dirtyW = x1 - x0 + 1;
-  const dirtyH = y1 - y0 + 1;
-  fieldCtx.putImageData(fieldImg, 0, 0, x0, y0, dirtyW, dirtyH);
-
-  // Clear bounding box for next frame
-  resetDirty();
-}
-
+  markDirty(cx0, cy0); markDirty(cx1, cy1);
 
   if (DEPLETE) {
     waterLoad = Math.max(0, waterLoad - usedW * WATER_USE);
@@ -405,20 +619,23 @@ function render() {
   }
 }
 
-// ═══════════════ FORCE (agitation — pushes existing water only) ═══════════════
+// ═══ FORCE ═══
 function injectForce(px, py, dirx, diry, speedCells, radius) {
   const rCells = Math.max(1, Math.ceil(radius / CELL)) + 1;
   const cx0 = Math.floor(px/CELL - rCells), cx1 = Math.ceil(px/CELL + rCells);
   const cy0 = Math.floor(py/CELL - rCells), cy1 = Math.ceil(py/CELL + rCells);
   const t = performance.now();
+  const rMax2 = (radius + CELL) * (radius + CELL), rFall = radius + CELL;
   for (let cy = cy0; cy <= cy1; cy++) {
     for (let cx = cx0; cx <= cx1; cx++) {
+      if (cx < 0 || cy < 0 || cx >= gridW || cy >= gridH) continue;
       const c = cells.get(key(cx, cy));
-      if (!c) continue;                          // only water can be pushed
-      const wcx = (cx + 0.5) * CELL, wcy = (cy + 0.5) * CELL;
-      const d = Math.hypot(wcx - px, wcy - py);
-      if (d > radius + CELL) continue;
-      const f = Math.max(0, 1 - d / (radius + CELL * 0.5));
+      if (!c) continue;
+      const dx = (cx + 0.5) * CELL - px, dy = (cy + 0.5) * CELL - py;
+      const d2 = dx*dx + dy*dy;
+      if (d2 > rMax2) continue;
+      const d = Math.sqrt(d2);
+      const f = Math.max(0, 1 - d / rFall);
       if (f <= 0) continue;
       const imp = speedCells * FORCE * f * (WATER_DRIVE_MIN + (1 - WATER_DRIVE_MIN) * waterLoad);
       c.vx += dirx * imp; c.vy += diry * imp;
@@ -428,19 +645,21 @@ function injectForce(px, py, dirx, diry, speedCells, radius) {
   }
 }
 
-// radial shove outward from the press point (a bloom / backrun)
 function injectPress(px, py, radius, strength) {
   const rCells = Math.max(1, Math.ceil(radius / CELL)) + 1;
   const cx0 = Math.floor(px/CELL - rCells), cx1 = Math.ceil(px/CELL + rCells);
   const cy0 = Math.floor(py/CELL - rCells), cy1 = Math.ceil(py/CELL + rCells);
+  const rMax2 = (radius + CELL) * (radius + CELL), rFall = radius + CELL * 0.5;
   for (let cy = cy0; cy <= cy1; cy++) {
     for (let cx = cx0; cx <= cx1; cx++) {
+      if (cx < 0 || cy < 0 || cx >= gridW || cy >= gridH) continue;
       const c = cells.get(key(cx, cy));
       if (!c) continue;
       const dx = (cx + 0.5) * CELL - px, dy = (cy + 0.5) * CELL - py;
-      const d = Math.hypot(dx, dy);
-      if (d > radius + CELL) continue;
-      const f = Math.max(0, 1 - d / (radius + CELL * 0.5));
+      const d2 = dx*dx + dy*dy;
+      if (d2 > rMax2) continue;
+      const d = Math.sqrt(d2);
+      const f = Math.max(0, 1 - d / rFall);
       if (f <= 0) continue;
       const inv = d > 0.001 ? 1 / d : 0;
       const imp = strength * f;
@@ -450,19 +669,16 @@ function injectPress(px, py, radius, strength) {
   }
 }
 
-// ═══════════════ PRESSURE DIFFUSION (single-pass, conservative) ═══════════════
-// Each shared edge is processed exactly once: +x/+y directions always, and
-// -x/-y only into cells that don't exist yet. No double-count, no leak.
+// ═══ PRESSURE DIFFUSION ═══
+// Single-pass and conservative: each shared edge is processed exactly once
+// (+x/+y always, -x/-y only into cells that don't exist yet). No double-count.
 function diffuse(dtSec) {
-  const deltas = new Map();
-  const col = new Map();   // per receiving cell: pigment-weighted incoming colour
-  const add = (k, ds, dp) => { let d = deltas.get(k); if (!d) { d = { ds:0, dp:0 }; deltas.set(k, d); } d.ds += ds; d.dp += dp; };
-  const addCol = (k, r, g, b, wp) => { if (wp <= 0) return; let d = col.get(k); if (!d) { d = { r:0, g:0, b:0, w:0 }; col.set(k, d); } d.r += r*wp; d.g += g*wp; d.b += b*wp; d.w += wp; };
   const dtFactor = Math.min(1, dtSec * 60);
+  const dirty = _dirtyList; dirty.length = 0;
 
   for (const [k, c] of cells) {
     if (c.sat < EPS && c.pig < EPS) continue;
-    const ci = k.indexOf(','); const cx = +k.slice(0, ci), cy = +k.slice(ci + 1);
+    const cx = k % gridW, cy = (k / gridW) | 0;
     const nb = [[cx+1,cy,0],[cx-1,cy,1],[cx,cy+1,2],[cx,cy-1,3]];
 
     for (const [nx, ny, dir] of nb) {
@@ -470,7 +686,7 @@ function diffuse(dtSec) {
       const canonical = (dir === 0 || dir === 2);
       const nk = key(nx, ny);
       const nCell = cells.get(nk);
-      if (nCell && !canonical) continue;         // handled from the other cell
+      if (nCell && !canonical) continue;
 
       const nSat = nCell ? nCell.sat : 0, nPig = nCell ? nCell.pig : 0;
       const diff = c.sat - nSat;
@@ -484,95 +700,168 @@ function diffuse(dtSec) {
       for (let s = 0; s < EDGE_SUB; s++) grain += 0.6 + 0.5 * c.grain[(dir + s) % 4];
       grain /= EDGE_SUB;
 
-      const move = diff * FLOW * DIFF_COEF * grain * dtFactor;
+      // Read from whichever cell is DONATING water this edge. Must stay above
+      // `edgeness` — declaring it below is a TDZ ReferenceError that hard-freezes.
+      const srcSat  = (diff > 0) ? c.sat : nSat;
+      const srcPig  = (diff > 0) ? c.pig : nPig;
+
+      const edgeness = 1 - Math.min(1, nSat / (srcSat + EPS));
+      grain = Math.max(0.05, 1 + (grain - 1) * (1 + FINGER_GAIN * edgeness));
+
+      const conc0  = srcSat > EPS ? srcPig / srcSat : 0;
+      const viscR  = 1 - VISC_MAX * (conc0 / (conc0 + VISC_CONC));
+      const hRel   = Math.min(1, srcSat / FILM_REF);
+      const filmR  = 1 - FILM_DRAG * (1 - hRel * hRel);
+
+      // horizontal edges (dir 0/1) ride the grain when fiberBiasH is
+      // positive; vertical edges (dir 2/3) get the complementary sign —
+      // a single cos(2·angle) term covers both axes
+      const bh = fiberBiasH[k];
+      const fiberBias = (dir === 0 || dir === 1)
+        ? 1 + FIBER_ANISO * bh
+        : 1 - FIBER_ANISO * bh;
+
+      const move = diff * FLOW * DIFF_COEF * grain * viscR * filmR * dtFactor * fiberBias;
       if (move === 0) continue;
 
+      // write into pre-allocated arrays instead of allocating Maps
       if (move > 0) {
         const conc = c.sat > EPS ? c.pig / c.sat : 0;
-        add(k, -move, -move*conc); add(nk, move, move*conc);
-        addCol(nk, c.ir, c.ig, c.ib, move*conc);                 // nk gains k's colour
+        const pigMove = move * conc;
+        if (_deltaS[k]  === 0 && _deltaP[k]  === 0) dirty.push(k);
+        if (_deltaS[nk] === 0 && _deltaP[nk] === 0) dirty.push(nk);
+        _deltaS[k]  -= move;  _deltaP[k]  -= pigMove;
+        _deltaS[nk] += move;  _deltaP[nk] += pigMove;
+        if (pigMove > 0) {
+          _colR[nk] += c.ir*pigMove; _colG[nk] += c.ig*pigMove;
+          _colB[nk] += c.ib*pigMove; _colW[nk] += pigMove;
+        }
       } else {
         const conc = nSat > EPS ? nPig / nSat : 0;
-        add(k, -move, -move*conc); add(nk, move, move*conc);
-        if (nCell) addCol(k, nCell.ir, nCell.ig, nCell.ib, -move*conc);  // k gains nk's colour
+        const pigMove = -move * conc;
+        if (_deltaS[k]  === 0 && _deltaP[k]  === 0) dirty.push(k);
+        if (_deltaS[nk] === 0 && _deltaP[nk] === 0) dirty.push(nk);
+        _deltaS[k]  -= move;  _deltaP[k]  -= (-move * conc);
+        _deltaS[nk] += move;  _deltaP[nk] += pigMove;
+        if (nCell && pigMove > 0) {
+          _colR[k] += nCell.ir*pigMove; _colG[k] += nCell.ig*pigMove;
+          _colB[k] += nCell.ib*pigMove; _colW[k] += pigMove;
+        }
       }
     }
   }
 
-  for (const [k, d] of deltas) {
-    let c = cells.get(k);
-    if (!c) { if (d.ds <= 0 && d.dp <= 0) continue; const ci = k.indexOf(','); c = getCell(+k.slice(0, ci), +k.slice(ci + 1), true); }
-    c.sat = Math.max(0, c.sat + d.ds); c.pig = Math.max(0, c.pig + d.dp);
-  }
-  for (const [k, d] of col) {
-    const c = cells.get(k);
-    if (!c || d.w <= 0) continue;
-    const a = Math.min(0.5, d.w / (c.pig + EPS));
-    const ir = d.r/d.w, ig = d.g/d.w, ib = d.b/d.w;
-    c.ir = c.ir*(1-a) + ir*a; c.ig = c.ig*(1-a) + ig*a; c.ib = c.ib*(1-a) + ib*a;
+  // apply deltas and zero out — O(changed_cells), no GC
+  for (let i = 0, len = dirty.length; i < len; i++) {
+    const ki = dirty[i];
+    const ds = _deltaS[ki], dp = _deltaP[ki];
+    _deltaS[ki] = 0; _deltaP[ki] = 0;
+    if (ds === 0 && dp === 0) continue;
+    let c = cells.get(ki);
+    if (!c) {
+      if (ds <= 0 && dp <= 0) { _colR[ki]=_colG[ki]=_colB[ki]=_colW[ki]=0; continue; }
+      c = getCell(ki % gridW, (ki / gridW) | 0, true);
+    }
+    c.sat = Math.max(0, c.sat + ds);
+    c.pig = Math.max(0, c.pig + dp);
+
+    const cw = _colW[ki];
+    if (cw > 0) {
+      const ir = _colR[ki]/cw, ig = _colG[ki]/cw, ib = _colB[ki]/cw;
+      const a = Math.min(0.5, cw / (c.pig + EPS));
+      c.ir = c.ir*(1-a) + ir*a; c.ig = c.ig*(1-a) + ig*a; c.ib = c.ib*(1-a) + ib*a;
+    }
+    _colR[ki]=0; _colG[ki]=0; _colB[ki]=0; _colW[ki]=0;
   }
 }
 
-// ═══════════════ ADVECTION (velocity carries water + pigment) ═══════════════
+// ═══ ADVECTION ═══ velocity carries water + pigment; same typed-array pools
 function advect(dtSec) {
-  const dS = new Map();      // sat/pig deltas
-  const carry = new Map();   // momentum handed to receiving cells
-  const col = new Map();     // pigment-weighted incoming colour
-  const add  = (k, ds, dp) => { let d = dS.get(k); if (!d) { d = { ds:0, dp:0 }; dS.set(k, d); } d.ds += ds; d.dp += dp; };
-  const addC = (k, vx, vy, w) => { let d = carry.get(k); if (!d) { d = { vx:0, vy:0, w:0 }; carry.set(k, d); } d.vx += vx*w; d.vy += vy*w; d.w += w; };
-  const addCol = (k, r, g, b, wp) => { if (wp <= 0) return; let d = col.get(k); if (!d) { d = { r:0, g:0, b:0, w:0 }; col.set(k, d); } d.r += r*wp; d.g += g*wp; d.b += b*wp; d.w += wp; };
+  const dirty = _dirtyList; dirty.length = 0;
 
   for (const [k, c] of cells) {
     if (c.sat < EPS) continue;
     if (c.vx === 0 && c.vy === 0) continue;
-    const ci = k.indexOf(','); const cx = +k.slice(0, ci), cy = +k.slice(ci + 1);
+    const cx = k % gridW, cy = (k / gridW) | 0;
     const conc = c.pig / c.sat;
 
-    let fx = c.vx * dtSec;
+    const viscR = 1 - VISC_MAX * (conc / (conc + VISC_CONC));
+    const hRel  = Math.min(1, c.sat / FILM_REF);
+    const filmR = 1 - FILM_DRAG * (1 - hRel * hRel);
+    const drag  = Math.max(0.05, viscR * filmR);
+
+    let fx = c.vx * drag * dtSec;
     if (fx > ADV_CFL) fx = ADV_CFL; else if (fx < -ADV_CFL) fx = -ADV_CFL;
     if (fx > 1e-4 || fx < -1e-4) {
       const nx = cx + (fx > 0 ? 1 : -1);
       if (nx >= 0 && nx < gridW) {
-        const sMove = c.sat * Math.abs(fx), pMove = sMove * conc, nk = key(nx, cy);
-        add(k, -sMove, -pMove); add(nk, sMove, pMove);
-        addC(nk, c.vx, c.vy, sMove * MOM_CARRY);
-        addCol(nk, c.ir, c.ig, c.ib, pMove);
+        const nk = key(nx, cy);
+        const sMove = c.sat * Math.abs(fx), pMove = sMove * conc;
+        if (_deltaS[k]  === 0 && _deltaP[k]  === 0) dirty.push(k);
+        if (_deltaS[nk] === 0 && _deltaP[nk] === 0) dirty.push(nk);
+        _deltaS[k]  -= sMove; _deltaP[k]  -= pMove;
+        _deltaS[nk] += sMove; _deltaP[nk] += pMove;
+        if (pMove > 0) { _colR[nk]+=c.ir*pMove; _colG[nk]+=c.ig*pMove; _colB[nk]+=c.ib*pMove; _colW[nk]+=pMove; }
+        const mw = sMove * MOM_CARRY;
+        _deltaVX[nk] += c.vx*mw; _deltaVY[nk] += c.vy*mw; _deltaVW[nk] += mw;
       }
     }
 
-    let fy = c.vy * dtSec;
+    let fy = c.vy * drag * dtSec;
     if (fy > ADV_CFL) fy = ADV_CFL; else if (fy < -ADV_CFL) fy = -ADV_CFL;
     if (fy > 1e-4 || fy < -1e-4) {
       const ny = cy + (fy > 0 ? 1 : -1);
       if (ny >= 0 && ny < gridH) {
-        const sMove = c.sat * Math.abs(fy), pMove = sMove * conc, nk = key(cx, ny);
-        add(k, -sMove, -pMove); add(nk, sMove, pMove);
-        addC(nk, c.vx, c.vy, sMove * MOM_CARRY);
-        addCol(nk, c.ir, c.ig, c.ib, pMove);
+        const nk = key(cx, ny);
+        const sMove = c.sat * Math.abs(fy), pMove = sMove * conc;
+        if (_deltaS[k]  === 0 && _deltaP[k]  === 0) dirty.push(k);
+        if (_deltaS[nk] === 0 && _deltaP[nk] === 0) dirty.push(nk);
+        _deltaS[k]  -= sMove; _deltaP[k]  -= pMove;
+        _deltaS[nk] += sMove; _deltaP[nk] += pMove;
+        if (pMove > 0) { _colR[nk]+=c.ir*pMove; _colG[nk]+=c.ig*pMove; _colB[nk]+=c.ib*pMove; _colW[nk]+=pMove; }
+        const mw = sMove * MOM_CARRY;
+        _deltaVX[nk] += c.vx*mw; _deltaVY[nk] += c.vy*mw; _deltaVW[nk] += mw;
       }
     }
   }
 
-  for (const [k, d] of dS) {
-    let c = cells.get(k);
-    if (!c) { if (d.ds <= 0 && d.dp <= 0) continue; const ci = k.indexOf(','); c = getCell(+k.slice(0, ci), +k.slice(ci + 1), true); }
-    c.sat = Math.max(0, c.sat + d.ds); c.pig = Math.max(0, c.pig + d.dp);
-  }
-  for (const [k, d] of col) {
-    const c = cells.get(k);
-    if (!c || d.w <= 0) continue;
-    const a = Math.min(0.5, d.w / (c.pig + EPS));
-    const ir = d.r/d.w, ig = d.g/d.w, ib = d.b/d.w;
-    c.ir = c.ir*(1-a) + ir*a; c.ig = c.ig*(1-a) + ig*a; c.ib = c.ib*(1-a) + ib*a;
-  }
-  for (const [k, d] of carry) {
-    const c = cells.get(k);
-    if (!c || d.w <= 0) continue;
-    const inVx = d.vx / d.w, inVy = d.vy / d.w;
-    const a = Math.min(0.6, d.w / (c.sat + EPS));   // stronger blend where more flow arrived
-    c.vx = c.vx * (1 - a) + inVx * a;
-    c.vy = c.vy * (1 - a) + inVy * a;
-    clampVel(c);
+  for (let i = 0, len = dirty.length; i < len; i++) {
+    const ki = dirty[i];
+    const ds = _deltaS[ki], dp = _deltaP[ki];
+    _deltaS[ki] = 0; _deltaP[ki] = 0;
+    if (ds === 0 && dp === 0) {
+      _colR[ki]=_colG[ki]=_colB[ki]=_colW[ki]=0;
+      _deltaVX[ki]=_deltaVY[ki]=_deltaVW[ki]=0;
+      continue;
+    }
+    let c = cells.get(ki);
+    if (!c) {
+      if (ds <= 0 && dp <= 0) {
+        _colR[ki]=_colG[ki]=_colB[ki]=_colW[ki]=0;
+        _deltaVX[ki]=_deltaVY[ki]=_deltaVW[ki]=0;
+        continue;
+      }
+      c = getCell(ki % gridW, (ki / gridW) | 0, true);
+    }
+    c.sat = Math.max(0, c.sat + ds);
+    c.pig = Math.max(0, c.pig + dp);
+
+    const cw = _colW[ki];
+    if (cw > 0) {
+      const ir = _colR[ki]/cw, ig = _colG[ki]/cw, ib = _colB[ki]/cw;
+      const a = Math.min(0.5, cw / (c.pig + EPS));
+      c.ir = c.ir*(1-a)+ir*a; c.ig = c.ig*(1-a)+ig*a; c.ib = c.ib*(1-a)+ib*a;
+    }
+    _colR[ki]=0; _colG[ki]=0; _colB[ki]=0; _colW[ki]=0;
+
+    const vw = _deltaVW[ki];
+    if (vw > 0) {
+      const inVx = _deltaVX[ki]/vw, inVy = _deltaVY[ki]/vw;
+      const a = Math.min(0.6, vw / (c.sat + EPS));
+      c.vx = c.vx*(1-a)+inVx*a; c.vy = c.vy*(1-a)+inVy*a;
+      clampVel(c);
+    }
+    _deltaVX[ki]=0; _deltaVY[ki]=0; _deltaVW[ki]=0;
   }
 }
 
@@ -585,14 +874,14 @@ function decayVel(dtSec) {
   }
 }
 
-// ═══════════════ EVAPORATION + ABSORPTION ═══════════════
+// ═══ EVAPORATION + ABSORPTION ═══
 function evaporate(dtSec) {
   const rate = dtSec / DRY_SECONDS;
   for (const [k, c] of cells) {
+    if (c.sat > 0 || c.pig > EPS) markDirtyIdx(k);
     if (c.sat > 0) c.sat = Math.max(0, c.sat - rate);
     if (c.sat < ABSORB_SAT_THRESH && c.pig > EPS) {
-      const ci = k.indexOf(','); const cx = +k.slice(0, ci), cy = +k.slice(ci + 1);
-      const i = idxOf(cx, cy);
+      const i = k;
       if (absorbed[i] < MAX_ABSORBED) {
         const dryness = 1 - Math.min(1, c.sat / ABSORB_SAT_THRESH);
         let take = c.pig * Math.min(1, ABSORB_RATE * dryness * dtSec);
@@ -603,15 +892,19 @@ function evaporate(dtSec) {
   }
 }
 
+// Throttled to 500ms — a full Map sweep every frame bought nothing visually.
+let _lastReap = 0;
 function reapIdle(nowT) {
+  if (nowT - _lastReap < 500) return;
+  _lastReap = nowT;
   for (const [k, c] of cells) {
     if (c.sat < EPS) {
       if (nowT - c.lastActive > BAKE_AFTER_MS) {
         if (c.pig > 0.001) {
-          const ci = k.indexOf(','); const cx = +k.slice(0, ci), cy = +k.slice(ci + 1);
-          const i = idxOf(cx, cy), room = Math.max(0, MAX_ABSORBED - absorbed[i]);
+          const i = k, room = Math.max(0, MAX_ABSORBED - absorbed[i]);
           addStain(i, c.ir, c.ig, c.ib, Math.min(c.pig, room));
         }
+        markDirtyIdx(k);
         cells.delete(k);
       }
     } else {
@@ -620,35 +913,42 @@ function reapIdle(nowT) {
   }
 }
 
-// ═══════════════ RENDER (grid buffer -> bilinear upscale) ═══════════════
+// ═══ RENDER ═══
+// Blur lives on the `field` element as a CSS filter (GPU-composited), NOT as
+// ctx.filter on drawImage — Safari has no GPU path for that and falls back to a
+// full-canvas software convolution every frame. Same look, ~100x cheaper.
 function render() {
-  const data = fieldImg.data;
-  const N = gridW * gridH;
+  if (!needFullPaint && (dirtyX1 < dirtyX0 || dirtyY1 < dirtyY0)) return;
 
-  // base pass: paper + dried stain (ink colour composited over paper)
-  for (let i = 0; i < N; i++) {
-    const g = grainTex[i];
-    const T = absorbed[i] * (1 - GRANULATE * 0.5 + GRANULATE * g);
-    const a = 1 - Math.exp(-K_INK * T);
-    const pm = 1 - PAPER_GRAIN * (g - 0.5) * 2;
-    const om = (1 - a) * pm;                       // paper showing through
-    const o = i * 4;
-    data[o]   = PAPER[0]*om + absColR[i]*a;
-    data[o+1] = PAPER[1]*om + absColG[i]*a;
-    data[o+2] = PAPER[2]*om + absColB[i]*a;
-    data[o+3] = 255;
+  const data = fieldImg.data;
+
+  let bx0, by0, bx1, by1;
+  if (needFullPaint) { bx0 = 0; by0 = 0; bx1 = gridW - 1; by1 = gridH - 1; }
+  else { bx0 = Math.max(0, dirtyX0); by0 = Math.max(0, dirtyY0);
+         bx1 = Math.min(gridW - 1, dirtyX1); by1 = Math.min(gridH - 1, dirtyY1); }
+
+  for (let y = by0; y <= by1; y++) {
+    const row = y * gridW;
+    let o = (row + bx0) * 4;
+    for (let x = bx0; x <= bx1; x++, o += 4) {
+      const i = row + x;
+      const g = grainTex[i];
+      const T = absorbed[i] * (1 - GRANULATE * 0.5 + GRANULATE * g);
+      const a = expA(T);
+      data[o]   = absColR[i];
+      data[o+1] = absColG[i];
+      data[o+2] = absColB[i];
+      data[o+3] = a * 255;
+    }
   }
 
-  // overlay pass: live wet cells (wet pigment over stain + wet sheen)
   for (const [k, c] of cells) {
     if (c.sat < EPS && c.pig < EPS) continue;
-    const ci = k.indexOf(','); const cx = +k.slice(0, ci), cy = +k.slice(ci + 1);
-    const i = idxOf(cx, cy), g = grainTex[i];
+    const i = k, g = grainTex[i];
     const stainT = absorbed[i] * (1 - GRANULATE * 0.5 + GRANULATE * g);
     const liveP  = c.pig;
     const T = stainT + liveP;
-    const a = 1 - Math.exp(-K_INK * T);
-    // ink colour = stain + live pigment, weighted by their contribution
+    const a = expA(T);
     const wsum = stainT + liveP;
     let cr, cg, cb;
     if (wsum > EPS) {
@@ -656,25 +956,32 @@ function render() {
       cg = (absColG[i]*stainT + c.ig*liveP) / wsum;
       cb = (absColB[i]*stainT + c.ib*liveP) / wsum;
     } else { cr = c.ir; cg = c.ig; cb = c.ib; }
+    // dry-brush granulation: the paper's own tooth still breaks up edges,
+    // just as alpha variance now rather than a flat-paper colour mix
     let pv = 1 - PAPER_GRAIN * (g - 0.5) * 2;
     pv *= (1 - WET_SHEEN * Math.min(1, c.sat));
-    const om = (1 - a) * pv;
     const o = i * 4;
-    data[o]   = PAPER[0]*om + cr*a;
-    data[o+1] = PAPER[1]*om + cg*a;
-    data[o+2] = PAPER[2]*om + cb*a;
+    data[o]   = cr;
+    data[o+1] = cg;
+    data[o+2] = cb;
+    data[o+3] = Math.min(255, a * pv * 255);
   }
 
-  fieldCtx.putImageData(fieldImg, 0, 0);
-  ctx.save();
-  ctx.filter = SOFTEN > 0 ? `blur(${SOFTEN}px)` : 'none';
+  if (needFullPaint) { fieldCtx.putImageData(fieldImg, 0, 0); needFullPaint = false; }
+  else { fieldCtx.putImageData(fieldImg, 0, 0, bx0, by0, bx1 - bx0 + 1, by1 - by0 + 1); }
+
+  // paper first (real fibre/mote texture), then the wet-paint field on top —
+  // field pixels carry alpha now, so unpainted paper shows through untouched
+  // (no ctx.filter here — blur lives on `field` element via CSS)
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(paperCanvas, 0, 0, canvas.width, canvas.height);
   ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(field, 0, 0, gridW, gridH, 0, 0, canvas.width, canvas.height);
-  ctx.restore();
+
+  resetDirty();
 }
 
-// ═══════════════ LOOP ═══════════════
+// ═══ LOOP ═══
 let lastT = performance.now();
 function frame(nowT) {
   const dtSec = Math.min(0.05, (nowT - lastT) / 1000);
@@ -692,77 +999,168 @@ function frame(nowT) {
   requestAnimationFrame(frame);
 }
 
-// ═══════════════ SPLATTER — flick to throw droplets ═══════════════
-// a flick throws a fan of droplets in the direction of motion. each droplet is
-// just a deposit() at its landing spot, so it blooms, bleeds, stains and dries
-// under the exact same rules as the brush — no separate particles, no separate
-// render. farther droplets land fainter, the way real spatter does.
+// ═══ SPLATTER ═══
 function spawnSplat(px, py, angle, spd) {
   if (spd < SPLAT_FLICK_MIN) return;
-  if (waterLoad <= 0 && inkLoad <= 0) return;        // same load rule as the brush
+  if (waterLoad <= 0 && inkLoad <= 0) return;
   const seed = Math.floor(px)*3.1 + Math.floor(py)*7.7 + Math.floor(angle*57.3)*13.9;
   const cnt = Math.floor(Math.min(SPLAT_CAP, spd * SPLAT_COUNT));
   if (cnt < 3) return;
   const reach = Math.min(SPLAT_REACH_MAX, spd * SPLAT_REACH);
-  const fdx = Math.cos(angle), fdy = Math.sin(angle);                // the flick's own direction
-  const smear = Math.min(VMAX, spd * 1000 / CELL) * SPLAT_SMEAR;     // inherited momentum (cells/sec)
+  const fdx = Math.cos(angle), fdy = Math.sin(angle);
+  const smear = Math.min(VMAX, spd * 1000 / CELL) * SPLAT_SMEAR;
   for (let i = 0; i < cnt; i++) {
-    const a    = angle + dG(seed, i * 2.39996) * SPLAT_SPREAD;      // scattered around the flick
-    const dist = reach * (0.12 + dU(seed + 1.3, i) * 0.88);         // near .. far
+    const a    = angle + dG(seed, i * 2.39996) * SPLAT_SPREAD;
+    const dist = reach * (0.12 + dU(seed + 1.3, i) * 0.88);
     const rad  = Math.max(SPLAT_MIN_R, (0.3 + dU(seed + 2.6, i) * 0.7) * SPLAT_DROP_R);
-    const fall = 1 - 0.55 * dist / (reach + 1e-3);                  // farther = fainter / slower
-    const lx = px + Math.cos(a) * dist, ly = py + Math.sin(a) * dist; // where it lands
+    const fall = 1 - 0.55 * dist / (reach + 1e-3);
+    const lx = px + Math.cos(a) * dist, ly = py + Math.sin(a) * dist;
     deposit(lx, ly, rad, SPLAT_STRENGTH * fall);
-    injectForce(lx, ly, fdx, fdy, smear * fall, rad * 1.8);         // drag the fresh drop along the flick → streaks when fast
+    injectForce(lx, ly, fdx, fdy, smear * fall, rad * 1.8);
   }
 }
 
-// ═══════════════ INPUT — touch only ═══════════════
+// ═══ INPUT ═══
 let drawing = false, curPt = null, prevPt = null, lastMoveT = 0;
-let flickVX = 0, flickVY = 0, flickT = 0;   // lift-off velocity, for the splatter flick
+let flickVX = 0, flickVY = 0, flickT = 0;
+let strokeStarted = false, heldFed = false, smoothSpd = 0, touchStartT = 0;
 const STATIONARY_MS = 60;
 const HOLD_FEED_RATE = 3.0;
+const SPD_SMOOTH = 0.3;
+const HOLD_START_MS = 180;
+
+// ── pressure state ──
+let hasPressure = false;
+let smPress = 0.5, smContact = 1;
+let curW = BRUSH_R * 2;   // the live brush width, what hold-feed and lift reuse
 
 function tp(e) { const t = e.touches[0] || e.changedTouches[0]; return { x: t.clientX, y: t.clientY }; }
+
+// contact patch, in px. iOS reports radiusX/radiusY; most desktop browsers
+// report nothing, in which case we hand back 0 and the caller neutralises it.
+function tContact(e) {
+  const t = e.touches[0] || e.changedTouches[0];
+  if (!t) return 0;
+  return (t.radiusX || 0) + (t.radiusY || 0);
+}
+
+function tForce(e) {
+  const t = e.touches[0] || e.changedTouches[0];
+  return t ? (t.force || 0) : 0;
+}
+
+// force of exactly 0 or 1 is a browser stub, not a reading
+function sniffPressure(f) {
+  if (f > 0 && f < 1) hasPressure = true;
+}
+
+function normContact(contact) {
+  return contact > 0
+    ? Math.min(PCFG.contactMax, Math.max(PCFG.contactMin, contact / PCFG.contactRef))
+    : 1;
+}
+
+function brushW(press, contact) {
+  const w = BRUSH_R *
+    (PCFG.wLo + (PCFG.wHi - PCFG.wLo) * Math.pow(press, PCFG.pressGamma)) *
+    contact;
+  // deposit()'s cost is the square of the radius in cells, so a heavy press
+  // on the 32 button would otherwise sweep ~12k cells a step. Cap it.
+  return Math.min(BRUSH_R * PCFG.wCap, Math.max(1.5, w));
+}
+
+// pressure's contribution to how much load lands — neutral without hardware
+function pressLoadMul() {
+  if (!hasPressure) return 1;
+  return PCFG.sMulLo + (PCFG.sMulHi - PCFG.sMulLo) * Math.pow(smPress, PCFG.inkGamma);
+}
+
+// ── tuning readout ── tells you which signal your device is actually giving
+let telEl = null, telTimer = null;
+function showTel() {
+  if (!telEl) {
+    telEl = document.createElement('div');
+    telEl.id = 'tel';
+    document.body.appendChild(telEl);
+  }
+  telEl.textContent =
+    'press ' + smPress.toFixed(2) +
+    '   pad ' + smContact.toFixed(2) +
+    '   w ' + curW.toFixed(1) +
+    (hasPressure ? '   [force]' : '   [speed]');
+  telEl.classList.add('on');
+  clearTimeout(telTimer);
+  telTimer = setTimeout(() => telEl.classList.remove('on'), 900);
+}
 
 canvas.addEventListener('touchstart', e => {
   e.preventDefault();
   drawing = true;
   const p = tp(e), t = performance.now();
   curPt = { x: p.x, y: p.y }; prevPt = { x: p.x, y: p.y, t };
-  lastMoveT = t; holdFeed._last = t;
+  lastMoveT = t; holdFeed._last = t; touchStartT = t;
   flickVX = 0; flickVY = 0; flickT = 0;
-  deposit(p.x, p.y, BRUSH_R, 1.0);
-  injectPress(p.x, p.y, BRUSH_R, PRESS_FORCE);  // always agitate on touch, even dry
+  strokeStarted = false; heldFed = false; smoothSpd = 0;
+
+  // seed the touch signals. Without force hardware we start at neutral and
+  // let the speed estimate take over on the first move.
+  sniffPressure(tForce(e));
+  smPress = hasPressure ? (tForce(e) || 0.5) : 0.5;
+  smContact = normContact(tContact(e));
+  curW = brushW(smPress, smContact);
+
+  injectPress(p.x, p.y, curW * 0.5, PRESS_FORCE);
+  showTel();
 }, { passive:false });
 
 canvas.addEventListener('touchmove', e => {
   e.preventDefault();
   if (!drawing) return;
+  sniffPressure(tForce(e));
   const p = tp(e), t = performance.now();
   const dt = Math.max(4, t - prevPt.t);
   const dx = p.x - prevPt.x, dy = p.y - prevPt.y;
   const dist = Math.hypot(dx, dy);
-  const spd = dist / dt;                                  // px/ms
-  const w = Math.max(BRUSH_R * 0.5, BRUSH_R / (1 + spd * 3.5)); // fast stroke = thinner (scales with size)
-  const sMul = Math.min(1.4, Math.max(0.3, 1 / (1 + spd * 4)));
-  const steps = Math.max(1, Math.floor(dist / 4));
-  const dirx = dist > 0.001 ? dx / dist : 0, diry = dist > 0.001 ? dy / dist : 0;
-  const speedCells = Math.min(VMAX, spd * 1000 / CELL);   // px/ms -> cells/sec
+  const spd = dist / dt;
+  if (!strokeStarted) smoothSpd = spd; else smoothSpd += (spd - smoothSpd) * SPD_SMOOTH;
 
-  for (let i = 1; i <= steps; i++) {
+  // real force when the hardware gives it, speed-derived when it doesn't
+  const pTarget = hasPressure ? tForce(e) : 1 / (1 + smoothSpd * PCFG.fallbackSpeedK);
+  smPress = !strokeStarted ? pTarget : smPress + (pTarget - smPress) * PCFG.touchSmooth;
+
+  // contact patch: finger pad vs fingertip
+  const cTarget = normContact(tContact(e));
+  smContact = !strokeStarted ? cTarget : smContact + (cTarget - smContact) * PCFG.touchSmooth;
+
+  const w = curW = brushW(smPress, smContact);
+  const sMul = Math.min(1.4, Math.max(0.3, 1 / (1 + smoothSpd * 4))) * pressLoadMul();
+  // step with the brush instead of a flat 2px — a fat brush doesn't need
+  // the same sample density as a fine one
+  const steps = Math.max(1, Math.floor(dist / Math.max(2, w * 0.25)));
+  const dirx = dist > 0.001 ? dx / dist : 0, diry = dist > 0.001 ? dy / dist : 0;
+  const speedCells = Math.min(VMAX, spd * 1000 / CELL);
+
+  const startI = strokeStarted ? 1 : 0;
+  for (let i = startI; i <= steps; i++) {
     const tt = i / steps;
     const x = prevPt.x + dx * tt, y = prevPt.y + dy * tt;
-    injectForce(x, y, dirx, diry, speedCells, w);   // shove existing water — always, even dry brush
-    if (waterLoad > 0 || inkLoad > 0) deposit(x, y, w, sMul);  // only lay paint if we have load
+    injectForce(x, y, dirx, diry, speedCells, w);
+    if (waterLoad > 0 || inkLoad > 0) deposit(x, y, w, sMul);
   }
-  flickVX = dx / dt; flickVY = dy / dt; flickT = t;   // remember lift-off velocity
+  strokeStarted = true;
+  flickVX = dx / dt; flickVY = dy / dt; flickT = t;
   curPt = { x: p.x, y: p.y }; prevPt = { x: p.x, y: p.y, t }; lastMoveT = t;
+  showTel();
 }, { passive:false });
 
 canvas.addEventListener('touchend', e => {
   e.preventDefault();
-  // flick to splatter: only if the finger was still moving fast right at lift-off
+  if (drawing && !strokeStarted && !heldFed) {
+    // a tap that never moved: use whatever the touchdown reading gave us,
+    // so a light poke leaves a small mark and a firm one a broad blot
+    const lp = tp(e);
+    deposit(lp.x, lp.y, curW * 0.5, 1.0);
+  }
   if (drawing && performance.now() - flickT < 90) {
     const spd = Math.hypot(flickVX, flickVY);
     if (spd > SPLAT_FLICK_MIN) {
@@ -774,19 +1172,20 @@ canvas.addEventListener('touchend', e => {
 }, { passive:false });
 canvas.addEventListener('touchcancel', () => { drawing = false; curPt = null; prevPt = null; });
 
-// held-still brush keeps feeding + blooming (a loaded brush bleeds; a dry one just agitates)
 function holdFeed(nowT) {
   if (!drawing || !curPt) return;
   if (nowT - lastMoveT < STATIONARY_MS) return;
+  if (!strokeStarted && nowT - touchStartT < HOLD_START_MS) return;
   const dt = Math.min(0.05, (nowT - (holdFeed._last || nowT)) / 1000);
   holdFeed._last = nowT;
-  deposit(curPt.x, curPt.y, BRUSH_R, dt * HOLD_FEED_RATE);
-  injectPress(curPt.x, curPt.y, BRUSH_R * 1.2, HOLD_PRESS * dt);
+  // hold-feed keeps the width it was resting at, so leaning in and letting
+  // it bleed spreads wider than resting a fingertip
+  deposit(curPt.x, curPt.y, curW * 0.5, dt * HOLD_FEED_RATE);
+  injectPress(curPt.x, curPt.y, curW * 0.6, HOLD_PRESS * dt);
+  heldFed = true;
 }
 
-// ═══════════ DIP STATION · NAPKIN · SWATCHES · FOLD-DOWN TRAY ═══════════
-// ink  -> charge pigment     water -> charge water
-// napkin: left drains ink · middle drains both · right drains water
+// ═══ DIP STATION ═══
 const tray      = document.getElementById('tray');
 const dipWater  = document.getElementById('dipWater');
 const dipInk    = document.getElementById('dipInk');
@@ -799,8 +1198,7 @@ function updateFills() {
 }
 updateFills();
 
-// ---- charge / drain ----
-let holding = null;   // 'ink' | 'water' | 'napInk' | 'napWater' | 'napBoth'
+let holding = null;
 function tickHold(nowT) {
   if (!holding) return;
   const dt = Math.min(0.1, (nowT - (tickHold._last || nowT)) / 1000);
@@ -826,7 +1224,6 @@ function bindDip(el, which) {
 bindDip(dipInk, 'ink');
 bindDip(dipWater, 'water');
 
-// napkin — three drain zones
 document.querySelectorAll('#napkin .napZone').forEach(z => {
   const d = z.dataset.drain;
   const which = d === 'ink' ? 'napInk' : d === 'water' ? 'napWater' : 'napBoth';
@@ -835,7 +1232,6 @@ document.querySelectorAll('#napkin .napZone').forEach(z => {
   z.addEventListener('touchcancel', () => { z.classList.remove('pressed'); stopHold(); });
 });
 
-// swatches — pick the ink colour (old strokes keep their own colour)
 document.querySelectorAll('#swatchRow .swatch').forEach(sw => {
   const pick = e => {
     e.preventDefault(); e.stopPropagation();
@@ -848,11 +1244,11 @@ document.querySelectorAll('#swatchRow .swatch').forEach(sw => {
   sw.addEventListener('click', pick);
 });
 
-// brush sizes — swap the active brush radius
 document.querySelectorAll('#swatchRow .size').forEach(sz => {
   const pick = e => {
     e.preventDefault(); e.stopPropagation();
     BRUSH_R = +sz.dataset.r;
+    curW = brushW(smPress, smContact);
     document.querySelectorAll('#swatchRow .size').forEach(s => s.classList.remove('active'));
     sz.classList.add('active');
     keepTrayOpen(); scheduleClose();
@@ -861,7 +1257,6 @@ document.querySelectorAll('#swatchRow .size').forEach(sz => {
   sz.addEventListener('click', pick);
 });
 
-// ---- fold-down reveal ----
 let trayTimer = null;
 function keepTrayOpen() { clearTimeout(trayTimer); }
 function scheduleClose(ms) { clearTimeout(trayTimer); trayTimer = setTimeout(closeTray, ms || 3500); }
@@ -872,7 +1267,6 @@ tray.addEventListener('touchstart', () => keepTrayOpen(), { passive:true });
 tray.addEventListener('touchend',   () => scheduleClose(), { passive:true });
 document.getElementById('grab').addEventListener('touchend', e => { e.preventDefault(); e.stopPropagation(); closeTray(); }, { passive:false });
 
-// double-tap anywhere, or swipe up from the very bottom edge, to reveal
 let tapCount = 0, tapTimer = null;
 canvas.addEventListener('touchstart', () => {
   tapCount++; clearTimeout(tapTimer);
@@ -887,26 +1281,76 @@ canvas.addEventListener('touchend', e => {
   if (dy > 45 && swipeY > window.innerHeight * 0.9) openTray();
 }, { passive:true });
 
-// ═══════════════ RESET (now actually wired up) ═══════════════
+// ═══ REFERENCE IMAGE ═══ a photo/sketch to trace or match against, faded
+// in/out with the slider — lives above the paint, below the tray, and never
+// intercepts touches (pointer-events:none) so drawing underneath still works.
+const refOverlay  = document.getElementById('refOverlay');
+const refFile     = document.getElementById('refFile');
+const refPick     = document.getElementById('refPick');
+const refOpacity  = document.getElementById('refOpacity');
+const refClearBtn = document.getElementById('refClear');
+let refObjectUrl  = null;
+
+function loadRefFile(file) {
+  if (!file) return;
+  if (refObjectUrl) URL.revokeObjectURL(refObjectUrl);
+  refObjectUrl = URL.createObjectURL(file);
+  refOverlay.src = refObjectUrl;
+  refOverlay.style.display = 'block';
+  refOverlay.style.opacity = refOpacity.value / 100;
+  refPick.classList.add('active');
+}
+
+function clearRef() {
+  if (refObjectUrl) { URL.revokeObjectURL(refObjectUrl); refObjectUrl = null; }
+  refOverlay.removeAttribute('src');
+  refOverlay.style.display = 'none';
+  refFile.value = '';
+  refPick.classList.remove('active');
+}
+
+refFile.addEventListener('change', e => { loadRefFile(e.target.files[0]); keepTrayOpen(); scheduleClose(); });
+
+function openRefPicker(e) { e.preventDefault(); e.stopPropagation(); keepTrayOpen(); refFile.click(); }
+refPick.addEventListener('touchend', openRefPicker, { passive:false });
+refPick.addEventListener('click', () => refFile.click());
+
+refOpacity.addEventListener('input', () => { refOverlay.style.opacity = refOpacity.value / 100; });
+refOpacity.addEventListener('touchstart', e => { e.stopPropagation(); keepTrayOpen(); }, { passive:true });
+refOpacity.addEventListener('touchend', e => { e.stopPropagation(); scheduleClose(); }, { passive:false });
+
+refClearBtn.addEventListener('touchend', e => { e.preventDefault(); e.stopPropagation(); clearRef(); }, { passive:false });
+refClearBtn.addEventListener('click', () => clearRef());
+
+// ═══ RESET ═══ clears the paper; brush loads are deliberately left alone
 const resetBtn = document.getElementById('resetBtn');
-function resetAll() { cells.clear(); if (absorbed) { absorbed.fill(0); absColR.fill(0); absColG.fill(0); absColB.fill(0); } waterLoad = 0.05; inkLoad = 4; updateFills(); }
+function resetAll() {
+  cells.clear();
+  if (absorbed) {
+    absorbed.fill(0);
+    absColR.fill(0); absColG.fill(0); absColB.fill(0);
+  }
+  needFullPaint = true;
+}
 resetBtn.addEventListener('touchend', e => { e.preventDefault(); resetAll(); }, { passive:false });
 resetBtn.addEventListener('click', () => resetAll());
 
-// ═══════════════ BOOTSTRAP ═══════════════
+// ═══ BOOTSTRAP ═══
 function resize() {
   dpr = Math.min(window.devicePixelRatio || 1, 3);
   const cssW = window.innerWidth, cssH = window.innerHeight;
   canvas.style.width = cssW + 'px'; canvas.style.height = cssH + 'px';
   canvas.width = Math.round(cssW * dpr); canvas.height = Math.round(cssH * dpr);
-  SOFTEN = Math.max(0.6, dpr * CELL * 0.12);
+  const blurPx = Math.max(0.6, dpr * CELL * 0.12);
+  SOFTEN = blurPx;
+  if (field) field.style.filter = blurPx > 0 ? `blur(${blurPx}px)` : 'none';
+  generateWashiPaper(canvas.width, canvas.height);
   setupGrid(cssW, cssH);
 }
 resize();
 window.addEventListener('resize', resize);
 requestAnimationFrame(frame);
 
-// show the tray once on load so it's discoverable, then let it fold down
 setTimeout(openTray, 400);
 </script>
 </body>
