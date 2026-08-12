@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>watercolor — force model</title>
+<title>Cliffwater</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   html, body {
@@ -191,16 +191,16 @@ const CELL = 2;
 const EPS  = 0;
 
 // ── pressure diffusion ──
-const FLOW           = .68;
-const DIFF_COEF      = 0.05;
+const FLOW           = .88;
+const DIFF_COEF      = 0.01;
 // paper grain runs along a local fiber direction (see fiberBiasH, built in
 // setupGrid from the same low-frequency field the paper texture uses) —
 // bleed travels faster with the grain than across it, same as real washi.
 const FIBER_ANISO    = 0.35;
 
 // ── pigment rheology ──
-const VISC_MAX    = 0.68;   // ← was 0.62
-const VISC_CONC   = .05;
+const VISC_MAX    = 0.44;   // ← was 0.62
+const VISC_CONC   = .01;
 const FILM_REF    = .8;
 const FILM_DRAG   = 0.9;   // ← was 0.75
 
@@ -330,12 +330,27 @@ const GOLD = Math.PI * (3 - Math.sqrt(5));
 // ═══════════════════════════════════════════════════════════════
 
 const SM_CONFIG = {
+  // ── evaporation (paint-mode drying quality) ──
   evaporationSpeed: 0.0042,
-  minBrushWidth: .01,
-  maxBrushWidth: 15.0,
-  speedSmooth: 0.5,
+
+  // ── ribbon brush (ported from sumi-e board CFG, verbatim) ──
+  wMax: 25, wMin: 0.5,
+  nibAspect: 1,
+  pressGamma: 1,
+  inkGamma: 0.98,
+  oMax: 0.98, oMin: 0.25,
+  alphaSmooth: 0.08,
+  fallbackSpeedK: 24,
+  touchSmooth: 0.5,
+  speedSmooth: 0.1,
+  dryStart: 1,
+  dryRag: 0.4,
+  dryBreak: 0.65,
+  tapMs: 120,
+
+  // ── bleed halo ──
   bleedStrength: .0000001,
-  bleedOpacity: 0.6,
+  bleedOpacity: 0.9,
 };
 
 // reuse the shared fract/dU/dG/R2A/R2B/GOLD already defined by the
@@ -350,8 +365,14 @@ const sm_drawingCtx = sm_drawingCanvas.getContext('2d');
 const sm_bleedCanvas = document.createElement('canvas');
 const sm_bleedCtx = sm_bleedCanvas.getContext('2d');
 
+// live-stroke canvas — the active ribbon is drawn here (cleared each
+// frame), then baked onto sm_drawingCanvas on touchend. Prevents
+// semi-transparent fill from accumulating at quad junctions.
+const sm_liveCanvas = document.createElement('canvas');
+const sm_liveCtx = sm_liveCanvas.getContext('2d');
+
 function sm_setupBuffers(w, h) {
-  [sm_outCanvas, sm_drawingCanvas, sm_bleedCanvas].forEach(c => {
+  [sm_outCanvas, sm_drawingCanvas, sm_bleedCanvas, sm_liveCanvas].forEach(c => {
     c.width = w;
     c.height = h;
   });
@@ -360,12 +381,14 @@ function sm_setupBuffers(w, h) {
 // ── state ──
 let sm_inkHex = '#292420';
 let sm_inkRgb = { r: 41, g: 36, b: 32 };
-let sm_pts = [];
-let sm_drawing = false;
 let sm_particles = [];
 let sm_ripple = null;
-let sm_smSpd = 0;
 let sm_undoStack = [];
+
+// ── ribbon stroke state ──
+let sm_live = null;          // active stroke: { pts[], born, minX/Y/maxX/Y }
+let sm_drawing = false;
+// sm_live.pts entries: { x, y, w, dry }
 
 function sm_hexToRgb(hex) {
   return {
@@ -397,6 +420,7 @@ function sm_clearAll() {
   sm_snapUndo();
   sm_drawingCtx.clearRect(0, 0, sm_drawingCanvas.width, sm_drawingCanvas.height);
   sm_bleedCtx.clearRect(0, 0, sm_bleedCanvas.width, sm_bleedCanvas.height);
+  sm_liveCtx.clearRect(0, 0, sm_liveCanvas.width, sm_liveCanvas.height);
   sm_particles = [];
   sm_ripple = null;
 }
@@ -437,7 +461,7 @@ class SmInkParticle {
 }
 
 function sm_triggerKineticSplatter(px, py, angle, speed) {
-  const seed = Math.floor(px) * 3.1 + Math.floor(py) * 7.7 + Math.floor(angle * 57.3) * 13.9;
+  const seed = Math.floor(px) * 6.1 + Math.floor(py) * 7.7 + Math.floor(angle * 57.3) * 13.9;
   const scaleMod = 0.45;
   const refSize = Math.min(140, speed * 10.0) * scaleMod;
   const dropletCount = Math.floor(Math.min(45, speed * (2 + dU(seed, 0.77) * 2)));
@@ -453,33 +477,148 @@ function sm_triggerKineticSplatter(px, py, angle, speed) {
   }
 }
 
-function sm_renderLinkSegment(p1, p2) {
-  const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y) || 1;
-  const dt = Math.min(40, Math.max(8, (p2.t - p1.t) || 16));
-  const raw = dist / dt;
-  const prev = sm_smSpd || raw;
-  sm_smSpd = prev + (raw - prev) * SM_CONFIG.speedSmooth;
+// ── RIBBON BRUSH — sumi-e board geometry, verbatim, on paint canvas ──────
+// Ported directly from sumi-e.html board mode. Uses extendStroke logic
+// with pressure smoothing, contact patch, nib orientation. drawLive
+// redraws the entire stroke as one filled path each frame. Writes to
+// sm_drawingCanvas (persistent) so paint-mode evaporation gives the warm
+// drying colour.
 
-  const getSpecs = (spd) => {
-    const range = SM_CONFIG.maxBrushWidth - SM_CONFIG.minBrushWidth;
-    const w = SM_CONFIG.minBrushWidth + range / (1.0 + spd * 4.5);
-    const opacity = 0.15 + 0.75 / (1.0 + spd * 7.0);
-    return { w, opacity };
+let sm_hasPressure = false;
+
+function sm_brushW(press, contact) {
+  // size buttons set BRUSH_R (2,8,16,32); board used brushWidthMultiplier
+  // map BRUSH_R to the same aggressive spread the sumi-e board used:
+  const mult = BRUSH_R <= 3 ? 0.4 : BRUSH_R <= 10 ? 1.0 : BRUSH_R <= 20 ? 1.6 : 2.8;
+  return (SM_CONFIG.wMin + (SM_CONFIG.wMax - SM_CONFIG.wMin)
+    * Math.pow(press, SM_CONFIG.pressGamma)) * (contact || 1) * mult;
+}
+
+function sm_beginStroke(x, y, t, press, contact) {
+  const p = sm_hasPressure ? (press || 0.5) : 0.5;
+  const c = 1; // no contact patch on mobile touch
+  const w0 = sm_brushW(p, c);
+  sm_live = {
+    born: t, lastX: x, lastY: y, lastT: t,
+    smSpd: 0, smPress: p, smContact: c,
+    alpha: null,
+    pts: [{ x, y, w: w0, dry: 0 }],
+    trail: [{ x, y, t }],
+    minX: x - w0 * 1.4 - 3, minY: y - w0 * 1.4 - 3,
+    maxX: x + w0 * 1.4 + 3, maxY: y + w0 * 1.4 + 3,
   };
+}
 
-  const stepDist = 0.8;
-  const steps = Math.max(1, Math.floor(dist / stepDist));
-  for (let i = 0; i <= steps; i++) {
-    const t = i / steps;
-    const x = p1.x + (p2.x - p1.x) * t;
-    const y = p1.y + (p2.y - p1.y) * t;
-    const spd = prev + (sm_smSpd - prev) * t;
-    const { w, opacity } = getSpecs(spd);
-    sm_drawingCtx.beginPath();
-    sm_drawingCtx.arc(x, y, w, 0, Math.PI * 2);
-    sm_drawingCtx.fillStyle = sm_inkAt(opacity * 0.28);
-    sm_drawingCtx.fill();
+function sm_extendStroke(x, y, t, press, contact) {
+  if (!sm_live) return;
+  const L = sm_live;
+  L.trail.push({ x, y, t });
+  if (L.trail.length > 6) L.trail.shift();
+
+  const dx = x - L.lastX, dy = y - L.lastY;
+  const dist = Math.hypot(dx, dy);
+  if (dist < 0.75) return;
+
+  const dt = Math.min(60, Math.max(4, t - L.lastT));
+  const raw = dist / dt;
+  const first = L.pts.length === 1;
+  L.smSpd = first ? raw : L.smSpd + (raw - L.smSpd) * SM_CONFIG.speedSmooth;
+  const spd = L.smSpd;
+
+  // pressure: real force when hardware gives it, speed-derived fallback
+  const pTarget = sm_hasPressure ? press : 1 / (1 + spd * SM_CONFIG.fallbackSpeedK);
+  L.smPress = first ? pTarget : L.smPress + (pTarget - L.smPress) * SM_CONFIG.touchSmooth;
+  L.smContact = 1; // mobile touch has no contact patch
+
+  // opacity follows pressure slowly
+  const o = SM_CONFIG.oMin + (SM_CONFIG.oMax - SM_CONFIG.oMin) * Math.pow(L.smPress, SM_CONFIG.inkGamma);
+  L.alpha = L.alpha === null ? o : L.alpha + (o - L.alpha) * SM_CONFIG.alphaSmooth;
+
+  const w = sm_brushW(L.smPress, L.smContact);
+  const dry = Math.max(0, spd - SM_CONFIG.dryStart);
+
+  L.pts.push({ x, y, w, dry });
+  if (first) { L.pts[0].w = w; }
+
+  const m = w * 1.4 + 3;
+  L.minX = Math.min(L.minX, x - m);
+  L.minY = Math.min(L.minY, y - m);
+  L.maxX = Math.max(L.maxX, x + m);
+  L.maxY = Math.max(L.maxY, y + m);
+  L.lastX = x; L.lastY = y; L.lastT = t;
+
+  sm_drawRibbon();
+}
+
+function sm_drawRibbon() {
+  if (!sm_live || sm_live.pts.length < 1) return;
+  const P = sm_live.pts;
+  const n = P.length;
+
+  const curAlpha = sm_live.alpha !== null
+    ? sm_live.alpha
+    : SM_CONFIG.oMin + (SM_CONFIG.oMax - SM_CONFIG.oMin) * Math.pow(sm_live.smPress, SM_CONFIG.inkGamma);
+
+  // ── draw onto the LIVE canvas (cleared first → no alpha accumulation) ──
+  const tgt = sm_liveCtx;
+  tgt.clearRect(sm_live.minX - 2, sm_live.minY - 2,
+    sm_live.maxX - sm_live.minX + 4, sm_live.maxY - sm_live.minY + 4);
+
+  tgt.fillStyle = sm_inkAt(curAlpha);
+  tgt.beginPath();
+
+  const NX = new Array(n), NY = new Array(n);
+  const LX = new Array(n), LY = new Array(n);
+  const RX = new Array(n), RY = new Array(n);
+
+  for (let i = 0; i < n; i++) {
+    const p  = P[i];
+    const p0 = P[Math.max(0, i - 1)];
+    const p1 = P[Math.min(n - 1, i + 1)];
+    let tx = p1.x - p0.x, ty = p1.y - p0.y;
+    const tl = Math.hypot(tx, ty);
+    if (tl < 1e-6) {
+      NX[i] = i > 0 ? NX[i-1] : 0;
+      NY[i] = i > 0 ? NY[i-1] : 1;
+    } else {
+      NX[i] = -ty / tl;
+      NY[i] =  tx / tl;
+    }
+
+    const dryK = Math.min(1, p.dry);
+    const s1 = 0.5 + 0.5 * Math.sin(i * 0.83 + 0.9 * Math.sin(i * 0.19));
+    const s2 = 0.5 + 0.5 * Math.sin(i * 0.71 + 1.1 * Math.sin(i * 0.23) + 2.4);
+    const s3 = 0.5 + 0.5 * Math.sin(i * 0.37 + 1.7 * Math.sin(i * 0.11));
+
+    let gapMul = 1;
+    if (dryK > 0 && s3 > SM_CONFIG.dryBreak) {
+      gapMul = 1 - dryK * (s3 - SM_CONFIG.dryBreak) / (1 - SM_CONFIG.dryBreak);
+    }
+
+    const a = Math.max(0, p.w * 0.5 * gapMul);
+    const b = Math.max(0, Math.min(a, Math.max(0.4 * gapMul, a * SM_CONFIG.nibAspect)));
+
+    const eL = 1 - dryK * SM_CONFIG.dryRag * (0.3 + 0.7 * s1);
+    const eR = 1 - dryK * SM_CONFIG.dryRag * (0.3 + 0.7 * s2);
+    LX[i] = p.x + NX[i] * a * eL;  LY[i] = p.y + NY[i] * a * eL;
+    RX[i] = p.x - NX[i] * a * eR;  RY[i] = p.y - NY[i] * a * eR;
+
+    // endcap circles — first and last point only
+    if (a > 0.01 && (i === 0 || i === n - 1)) {
+      tgt.moveTo(p.x + a, p.y);
+      tgt.arc(p.x, p.y, a, 0, Math.PI * 2);
+    }
   }
+
+  for (let i = 0; i < n - 1; i++) {
+    tgt.moveTo(LX[i],   LY[i]);
+    tgt.lineTo(RX[i],   RY[i]);
+    tgt.lineTo(RX[i+1], RY[i+1]);
+    tgt.lineTo(LX[i+1], LY[i+1]);
+    tgt.closePath();
+  }
+
+  tgt.fill();
 }
 
 function sm_applyEvaporation() {
@@ -506,6 +645,7 @@ function sm_processInkBleedAndComposition() {
   sm_outCtx.globalCompositeOperation = 'multiply';
   sm_outCtx.drawImage(sm_bleedCanvas, 0, 0);
   sm_outCtx.drawImage(sm_drawingCanvas, 0, 0);
+  sm_outCtx.drawImage(sm_liveCanvas, 0, 0);     // live stroke (active touch)
   sm_outCtx.globalCompositeOperation = 'source-over';
 
   for (let i = sm_particles.length - 1; i >= 0; i--) {
@@ -536,40 +676,47 @@ function sm_step() {
 }
 
 // ── input (only bound/active while mode === 'sumie') ──
-function sm_getPos(e) {
-  const src = e.touches ? e.touches[0] : e;
-  const d = window.devicePixelRatio ? Math.min(window.devicePixelRatio, 3) : 1;
-  return { x: src.clientX * d, y: src.clientY * d, t: Date.now() };
+// sm_getPos removed — coords computed inline in sm_onStart/sm_onMove
+
+function sm_sniffPressure(ptype, p) {
+  if (ptype === 'pen' || (p > 0 && p !== 0.5 && p !== 1)) sm_hasPressure = true;
 }
 
 function sm_onStart(e) {
   if (mode !== 'sumie') return;
   sm_snapUndo();
   sm_drawing = true;
-  sm_smSpd = 0;
-  sm_pts = [sm_getPos(e)];
+  const src = e.touches ? e.touches[0] : e;
+  const d = Math.min(window.devicePixelRatio || 1, 3);
+  const press = e.pressure || (src.force || 0.5);
+  sm_sniffPressure(e.pointerType, press);
+  sm_beginStroke(src.clientX * d, src.clientY * d, Date.now(), press, 0);
 }
 
 function sm_onMove(e) {
-  if (mode !== 'sumie' || !sm_drawing) return;
-  const p = sm_getPos(e);
-  const last = sm_pts[sm_pts.length - 1];
-  const dist = Math.hypot(p.x - last.x, p.y - last.y);
-  if (dist < 1.0) return;
-  sm_pts.push(p);
-  sm_renderLinkSegment(last, p);
+  if (mode !== 'sumie' || !sm_drawing || !sm_live) return;
+  const src = e.touches ? e.touches[0] : e;
+  const d = Math.min(window.devicePixelRatio || 1, 3);
+  const press = e.pressure || (src.force || 0.5);
+  sm_sniffPressure(e.pointerType, press);
+  sm_extendStroke(src.clientX * d, src.clientY * d, Date.now(), press, 0);
 }
 
 function sm_onEnd() {
   if (mode !== 'sumie' || !sm_drawing) return;
   sm_drawing = false;
-  if (sm_pts.length >= 3) sm_maybeFlick();
-  sm_pts = [];
+  if (sm_live && sm_live.trail && sm_live.trail.length >= 3) sm_maybeFlick();
+  // bake the finished stroke from the live canvas onto the permanent canvas
+  sm_drawingCtx.drawImage(sm_liveCanvas, 0, 0);
+  sm_liveCtx.clearRect(0, 0, sm_liveCanvas.width, sm_liveCanvas.height);
+  sm_live = null;
 }
 
 function sm_maybeFlick() {
-  const last = sm_pts[sm_pts.length - 1];
-  const prev = sm_pts[Math.max(0, sm_pts.length - 8)];
+  if (!sm_live || !sm_live.trail) return;
+  const trail = sm_live.trail;
+  const last = trail[trail.length - 1];
+  const prev = trail[Math.max(0, trail.length - 8)];
   const dx = last.x - prev.x, dy = last.y - prev.y;
   const dt = (last.t - prev.t) || 1;
   const spd = Math.hypot(dx, dy) / dt * 15;
@@ -961,6 +1108,20 @@ function injectPress(px, py, radius, strength) {
   }
 }
 
+// ═══ STATIC NEIGHBOR OFFSETS (Pre-allocated to prevent heap thrashing) ═══
+// Layout per entry (stride 4): dx, dy, weight, dir
+// dir 0=+x, 1=-x, 2=+y, 3=-y  (matches the canonical check: dir 0 or 2 are canonical)
+const NB_OFFSETS = new Float32Array([
+   1,  0, 1.0,   0,
+  -1,  0, 1.0,   1,
+   0,  1, 1.0,   2,
+   0, -1, 1.0,   3,
+   1,  1, 0.707, 0,
+  -1,  1, 0.707, 1,
+   1, -1, 0.707, 2,
+  -1, -1, 0.707, 3
+]);
+
 // ═══ PRESSURE DIFFUSION ═══
 // Single-pass and conservative: each shared edge is processed exactly once
 // (+x/+y always, -x/-y only into cells that don't exist yet). No double-count.
@@ -971,9 +1132,13 @@ function diffuse(dtSec) {
   for (const [k, c] of cells) {
     if (c.sat < EPS && c.pig < EPS) continue;
     const cx = k % gridW, cy = (k / gridW) | 0;
-    const nb = [[cx+1,cy,0],[cx-1,cy,1],[cx,cy+1,2],[cx,cy-1,3]];
+    for (let i = 0; i < 8; i++) {
+      const idx = i * 4;
+      const nx = cx + NB_OFFSETS[idx];
+      const ny = cy + NB_OFFSETS[idx + 1];
+      const weight = NB_OFFSETS[idx + 2];
+      const dir = NB_OFFSETS[idx + 3] | 0;
 
-    for (const [nx, ny, dir] of nb) {
       if (nx < 0 || ny < 0 || nx >= gridW || ny >= gridH) continue;
       const canonical = (dir === 0 || dir === 2);
       const nk = key(nx, ny);
@@ -1013,7 +1178,7 @@ function diffuse(dtSec) {
         ? 1 + FIBER_ANISO * bh
         : 1 - FIBER_ANISO * bh;
 
-      const move = diff * FLOW * DIFF_COEF * grain * viscR * filmR * dtFactor * fiberBias;
+      const move = diff * FLOW * DIFF_COEF * grain * viscR * filmR * dtFactor * fiberBias * weight;
       if (move === 0) continue;
 
       // write into pre-allocated arrays instead of allocating Maps
@@ -1273,8 +1438,8 @@ function compositeToScreen() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(paperCanvas, 0, 0, canvas.width, canvas.height);
   ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(sm_outCanvas, 0, 0, canvas.width, canvas.height);
   ctx.drawImage(field, 0, 0, gridW, gridH, 0, 0, canvas.width, canvas.height);
+  ctx.drawImage(sm_outCanvas, 0, 0, canvas.width, canvas.height);
 }
 
 // ═══ LOOP ═══
@@ -1626,7 +1791,7 @@ function setMode(next) {
   dipRow.style.display = mode === 'watercolor' ? 'flex' : 'none';
   // dropping any in-progress stroke from the outgoing engine
   drawing = false; curPt = null; prevPt = null;
-  sm_drawing = false; sm_pts = [];
+  sm_drawing = false; sm_live = null;
 }
 
 document.querySelectorAll('.modeBtn').forEach(btn => {
@@ -1647,6 +1812,173 @@ canvas.addEventListener('touchcancel', () => { if (mode === 'sumie') sm_onEnd();
 canvas.addEventListener('mousedown', e => { if (mode === 'sumie') sm_onStart(e); });
 window.addEventListener('mousemove', e => { if (mode === 'sumie') sm_onMove(e); });
 window.addEventListener('mouseup',   () => { if (mode === 'sumie') sm_onEnd(); });
+
+// ═══ JSON STROKE IMPORT ═══
+// Accepts a stroke-description object — describes *intent*, lets the physics
+// engine render it. Format:
+//
+//   {
+//     "paper":   { "wetness": 0.15 },
+//     "strokes": [
+//       {
+//         "brush":    16,
+//         "color":    "#714B48",
+//         "water":    0.7,
+//         "pigment":  0.5,
+//         "pressure": 0.4,
+//         "path": [[0.1,0.3],[0.5,0.7]]
+//       }
+//     ]
+//   }
+//
+// path coords are normalised 0-1 (x=0 left, y=0 top).
+// Still accepts the old flat cell-array format as a fallback.
+
+function importJsonLayer(jsonStr) {
+  let data;
+  try { data = JSON.parse(jsonStr); }
+  catch(e) { alert('JSON parse error: ' + e.message); return; }
+
+  // ── old flat-array fallback ──────────────────────────────────────────────
+  if (Array.isArray(data)) {
+    let n = 0;
+    for (const d of data) {
+      const gx = Math.round(d.x), gy = Math.round(d.y);
+      if (gx < 0 || gy < 0 || gx >= gridW || gy >= gridH) continue;
+      const c = getCell(gx, gy, true);
+      const sat = Math.min(1, Math.max(0, d.sat || 0));
+      const pig = Math.min(sat * MAX_LIVE_CONC, Math.max(0, d.pig || 0));
+      const toPixel = v => (v == null ? 0 : v <= 1.0 ? v * 255 : v);
+      const ir = toPixel(d.r), ig = toPixel(d.g), ib = toPixel(d.b);
+      const blendW = sat / (c.sat + sat + 1e-9);
+      c.ir = c.ir*(1-blendW) + ir*blendW;
+      c.ig = c.ig*(1-blendW) + ig*blendW;
+      c.ib = c.ib*(1-blendW) + ib*blendW;
+      c.sat = Math.min(1, c.sat + sat);
+      c.pig = Math.min(c.sat * MAX_LIVE_CONC, c.pig + pig);
+      c.lastActive = performance.now();
+      markDirty(gx, gy); n++;
+    }
+    needFullPaint = true;
+    console.log(`JSON import (legacy): ${n} cells`);
+    return;
+  }
+
+  // ── stroke-path format ───────────────────────────────────────────────────
+  const cssW = canvas.width  / dpr;
+  const cssH = canvas.height / dpr;
+
+  // paper.wetness — pre-wet the whole field with a thin water wash
+  if (data.paper && data.paper.wetness > 0) {
+    const wet = Math.min(0.6, data.paper.wetness);
+    for (let cy = 0; cy < gridH; cy++) {
+      for (let cx = 0; cx < gridW; cx++) {
+        const c = getCell(cx, cy, true);
+        c.sat = Math.min(1, c.sat + wet * (0.75 + 0.25 * dU(cx*1.3, cy*2.7)));
+        c.lastActive = performance.now();
+      }
+    }
+    markDirty(0, 0); markDirty(gridW-1, gridH-1);
+  }
+
+  // stash engine globals we're about to stomp
+  const _wl = waterLoad, _il = inkLoad;
+  const _ir = inkR, _ig = inkG, _ib = inkB;
+
+  let strokeCount = 0, dabCount = 0;
+  for (const stroke of (data.strokes || [])) {
+    if (!stroke.path || stroke.path.length < 1) continue;
+
+    // configure brush for this stroke
+    setInk(stroke.color || '#292420');
+    waterLoad = Math.min(LOAD_MAX, Math.max(0, stroke.water   ?? 0.8));
+    inkLoad   = Math.min(LOAD_MAX, Math.max(0, stroke.pigment ?? 0.5));
+
+    const brushR = stroke.brush    ?? BRUSH_R;
+    const press  = Math.min(1, Math.max(0, stroke.pressure ?? 0.5));
+    const sMul   = 0.35 + press * 1.0;  // pressure → deposit strength
+
+    // walk each path segment, interpolating dab points every ~1.5 cells
+    const path = stroke.path;
+    for (let seg = 0; seg < path.length; seg++) {
+      const [nx, ny] = path[seg];
+      const px = nx * cssW, py = ny * cssH;
+
+      if (seg === 0) {
+        deposit(px, py, brushR, sMul);
+        dabCount++;
+        continue;
+      }
+
+      const [ox, oy] = path[seg - 1];
+      const opx = ox * cssW, opy = oy * cssH;
+      const dx = px - opx, dy = py - opy;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      const steps = Math.max(1, Math.ceil(dist / (CELL * 1.5)));
+      const dirx = dist > 0 ? dx/dist : 0;
+      const diry = dist > 0 ? dy/dist : 0;
+      // speed that mimics a medium-tempo brushstroke
+      const speedCells = (dist / CELL) * 0.55;
+
+      for (let s = 0; s <= steps; s++) {
+        const t = s / steps;
+        const ipx = opx + dx*t, ipy = opy + dy*t;
+        deposit(ipx, ipy, brushR, sMul);
+        // inject velocity along stroke direction, scaled by pressure
+        if (dist > CELL) injectForce(ipx, ipy, dirx, diry, speedCells * press, brushR * 0.75);
+        dabCount++;
+      }
+    }
+    strokeCount++;
+  }
+
+  // restore engine globals
+  waterLoad = _wl; inkLoad = _il;
+  inkR = _ir; inkG = _ig; inkB = _ib;
+  sm_setInkColor('#' + [inkR,inkG,inkB].map(v => v.toString(16).padStart(2,'0')).join(''));
+
+  needFullPaint = true;
+  console.log(`JSON import: ${strokeCount} strokes, ${dabCount} dabs`);
+}
+
+// ── JSON import UI ──
+// Hidden file input + floating button. Tap the [⊕ JSON] button to load.
+// Long-press the button to get a text-paste dialog instead.
+(function buildJsonUI() {
+  const btn = document.createElement('button');
+  btn.textContent = '⊕ JSON';
+  btn.style.cssText = `
+    position:fixed; bottom:14px; right:14px; z-index:999;
+    background:#070b12; color:#57f2a1; border:1px solid #57f2a1;
+    font-family:'IBM Plex Mono',monospace; font-size:11px;
+    padding:6px 10px; border-radius:4px; opacity:0.82; cursor:pointer;
+    touch-action:none; user-select:none;
+  `;
+
+  const fileIn = document.createElement('input');
+  fileIn.type = 'file'; fileIn.accept = '.json,application/json';
+  fileIn.style.display = 'none';
+  fileIn.addEventListener('change', () => {
+    const f = fileIn.files[0]; if (!f) return;
+    const reader = new FileReader();
+    reader.onload = e => importJsonLayer(e.target.result);
+    reader.readAsText(f);
+    fileIn.value = '';
+  });
+
+  btn.addEventListener('click', () => fileIn.click());
+
+  // long-press → paste dialog
+  let pressT;
+  btn.addEventListener('touchstart', () => { pressT = setTimeout(() => {
+    const txt = prompt('Paste JSON layer array:');
+    if (txt) importJsonLayer(txt);
+  }, 600); }, { passive:true });
+  btn.addEventListener('touchend', () => clearTimeout(pressT), { passive:true });
+
+  document.body.appendChild(fileIn);
+  document.body.appendChild(btn);
+})();
 
 // ═══ BOOTSTRAP ═══
 function resize() {
