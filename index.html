@@ -91,13 +91,13 @@ canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
   <div id="grab"></div>
   <div id="swatchRow">
     <div class="swatch active" style="background:#0d0b09" data-r="0.05" data-g="0.04" data-b="0.035"></div>
-    <div class="swatch" style="background:#FF3434" data-r="1" data-g="0.20" data-b="0.20"></div>
-    <div class="swatch" style="background:#A77E58" data-r="0.65" data-g="0.49" data-b="0.34"></div>
-    <div class="swatch" style="background:#678652" data-r="0.4" data-g="0.52" data-b="0.32"></div>
-    <div class="swatch" style="background:#2C8CEC" data-r="0.17" data-g="0.54" data-b="0.93"></div>
+    <div class="swatch" style="background:#765649" data-r="0.46" data-g="0.34" data-b="0.29"></div>
+    <div class="swatch" style="background:#4E555B" data-r="0.31" data-g="0.33" data-b="0.36"></div>
+    <div class="swatch" style="background:#586456" data-r="0.35" data-g="0.39" data-b="0.34"></div>
+    <div class="swatch" style="background:#714B48" data-r="0.44" data-g="0.29" data-b="0.28"></div>
     <div class="rowDiv"></div>
-    <div id="resetBtn">↺</div>
     <div id="jsonBtn" title="Load JSON">⊕</div>
+    <div id="resetBtn">↺</div>
   </div>
   <div id="brushRow">
     <div class="bstyle active" data-style="round" title="Round">丸</div>
@@ -865,10 +865,11 @@ function bindHold(el,which){
 bindHold(document.getElementById('dipInk'),'ink');
 bindHold(document.getElementById('dipWater'),'water');
 // ═══════════════════════════════════════════════════════
-// NAPKIN CANVAS — touch-tracking paint surface
+// NAPKIN CANVAS — dab to preview current brush tone
 // ═══════════════════════════════════════════════════════
 const napCvs=document.getElementById('napCanvas');
 const napCtx=napCvs.getContext('2d');
+let napDabX=14;
 const NAP_W=360,NAP_H=120;
 
 function initNapkin(){
@@ -883,131 +884,92 @@ function initNapkin(){
     napCtx.fillStyle=`rgb(${g},${g-4},${g-10})`;
     napCtx.fillRect(x,y,hash11(i*7.1)*3+1,1);
   }
+  napDabX=14;
 }
 
-function napDabAt(cx,cy){
-  if(brush.w<0.5&&brush.p<0.5)return;
+function napkinDab(){
+  if(brush.w<1&&brush.p<1)return;
   const wFrac=brush.w/(brush.w+brush.p+1e-12);
   const pigDensity=brush.p/BRUSH_P_CAP;
   const alpha=Math.min(1,pigDensity*(0.3+0.7*(1-wFrac*0.6)));
   const r=Math.round(inkR*255);
   const g=Math.round(inkG*255);
   const b=Math.round(inkB*255);
-  const dabR=4+pigDensity*8+brush.w/BRUSH_W_CAP*4;
 
-  // main mark
-  napCtx.globalAlpha=Math.max(0.04,alpha*0.6);
+  const cx=napDabX;
+  const cy=NAP_H*0.45;
+  const dabR=5+pigDensity*10;
+
+  napCtx.globalAlpha=Math.max(0.05,alpha);
   napCtx.fillStyle=`rgb(${r},${g},${b})`;
   napCtx.beginPath();
   napCtx.arc(cx,cy,dabR,0,Math.PI*2);
   napCtx.fill();
 
-  // water bloom
-  if(wFrac>0.25){
-    napCtx.globalAlpha=Math.max(0.02,alpha*0.12*wFrac);
+  if(wFrac>0.3){
+    napCtx.globalAlpha=Math.max(0.03,alpha*0.18*wFrac);
     napCtx.beginPath();
-    napCtx.arc(cx,cy,dabR*(1+wFrac),0,Math.PI*2);
+    napCtx.arc(cx,cy,dabR*(1+wFrac*0.9),0,Math.PI*2);
     napCtx.fill();
   }
 
-  // edge darkening ring
-  if(pigDensity>0.06){
-    napCtx.globalAlpha=Math.max(0.03,alpha*0.35);
-    napCtx.lineWidth=0.8;
+  if(pigDensity>0.08){
+    napCtx.globalAlpha=Math.max(0.05,alpha*0.5);
+    napCtx.lineWidth=1.2;
     napCtx.strokeStyle=`rgb(${r},${g},${b})`;
     napCtx.beginPath();
-    napCtx.arc(cx,cy,dabR*0.8,0,Math.PI*2);
+    napCtx.arc(cx,cy,dabR*0.85,0,Math.PI*2);
     napCtx.stroke();
   }
 
   napCtx.globalAlpha=1;
+  napDabX+=dabR*2.5+6;
+  if(napDabX>NAP_W-14) initNapkin();
 
-  // cost a tiny bit of brush load
-  brush.w=Math.max(0,brush.w-brush.w*0.008);
-  brush.p=Math.max(0,brush.p-brush.p*0.008);
+  brush.w=Math.max(0,brush.w-brush.w*0.02);
+  brush.p=Math.max(0,brush.p-brush.p*0.02);
   updateFills();
-}
-
-function napClientToCanvas(clientX,clientY){
-  const rect=napCvs.getBoundingClientRect();
-  return[
-    (clientX-rect.left)/rect.width*NAP_W,
-    (clientY-rect.top)/rect.height*NAP_H
-  ];
 }
 
 setTimeout(initNapkin,300);
 window.addEventListener('resize',()=>setTimeout(initNapkin,100));
 
-// napkin: touch/drag = paint test marks, hold edges = drain
+// napkin: tap = dab test, hold = drain (position determines what drains)
 (function setupNapkin(){
   const nap=document.getElementById('napkin');
   let napHoldTimer=null;
   let napHolding=false;
-  let napDrawing=false;
-  let lastNapX=0,lastNapY=0;
 
   nap.addEventListener('pointerdown',e=>{
     e.preventDefault();e.stopPropagation();
-    nap.setPointerCapture(e.pointerId);
     napHolding=false;
-    napDrawing=false;
-
     const rect=nap.getBoundingClientRect();
     const xFrac=(e.clientX-rect.left)/rect.width;
+    // determine drain zone by horizontal position
     const drainType=xFrac<0.33?'napInk':xFrac>0.66?'napWater':'napBoth';
 
-    const[cx,cy]=napClientToCanvas(e.clientX,e.clientY);
-    lastNapX=cx;lastNapY=cy;
-
     napHoldTimer=setTimeout(()=>{
-      if(!napDrawing){
-        napHolding=true;
-        startHold(drainType);
-      }
-    },300);
-
-    // immediate first dab
-    napDabAt(cx,cy);
-    napDrawing=true;
+      napHolding=true;
+      startHold(drainType);
+    },250);
     keepOpen();
-  });
-
-  nap.addEventListener('pointermove',e=>{
-    if(!napDrawing&&!napHolding)return;
-    if(napHolding)return;
-    e.preventDefault();
-
-    // movement detected — cancel hold timer, we're painting
-    clearTimeout(napHoldTimer);
-
-    const[cx,cy]=napClientToCanvas(e.clientX,e.clientY);
-    const dx=cx-lastNapX,dy=cy-lastNapY;
-    const dist=Math.sqrt(dx*dx+dy*dy);
-    if(dist<2)return;
-
-    // interpolate dabs along drag
-    const steps=Math.max(1,Math.ceil(dist/3));
-    for(let i=1;i<=steps;i++){
-      const t=i/steps;
-      napDabAt(lastNapX+dx*t,lastNapY+dy*t);
-    }
-    lastNapX=cx;lastNapY=cy;
   });
 
   nap.addEventListener('pointerup',e=>{
     e.preventDefault();
     clearTimeout(napHoldTimer);
-    if(napHolding){stopHold();}
-    napHolding=false;
-    napDrawing=false;
+    if(napHolding){
+      stopHold();
+      napHolding=false;
+    }else{
+      // quick tap = dab test
+      napkinDab();
+    }
   });
 
   nap.addEventListener('pointercancel',e=>{
     clearTimeout(napHoldTimer);
-    if(napHolding){stopHold();}
-    napHolding=false;
-    napDrawing=false;
+    if(napHolding){stopHold();napHolding=false;}
   });
 })();
 
