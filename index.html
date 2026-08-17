@@ -1147,13 +1147,6 @@ document.getElementById('grab').addEventListener('pointerdown',e=>{
   e.preventDefault();e.stopPropagation();closeTray();
 });
 
-// swipe up from bottom still works
-let swipeY=0;
-canvas.addEventListener('pointerdown',e=>{swipeY=e.clientY});
-canvas.addEventListener('pointerup',e=>{
-  if(swipeY-e.clientY>45&&swipeY>window.innerHeight*0.88)openTray();
-});
-
 // ── Dispersion toggle ──
 let disperseOn=true;
 const disperseBtn=document.getElementById('disperseToggle');
