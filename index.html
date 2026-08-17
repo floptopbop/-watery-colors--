@@ -20,15 +20,27 @@ canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
 #barW .fill{background:rgba(120,180,220,0.55)}
 #barP .fill{background:rgba(200,180,160,0.55)}
 .bbar-label{font-size:7px;color:rgba(255,255,255,0.2);text-align:center;margin-top:2px}
+#trayTab{position:absolute;top:-26px;left:50%;transform:translateX(-50%);
+  z-index:11;padding:5px 20px 6px;
+  background:rgba(7,11,18,0.88);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  border-radius:10px 10px 0 0;border:1px solid rgba(87,242,161,0.15);border-bottom:none;
+  color:rgba(87,242,161,0.5);font-size:9px;letter-spacing:0.15em;
+  font-family:'IBM Plex Mono','Share Tech Mono',monospace;
+  touch-action:none;cursor:pointer}
 #tray{position:fixed;left:0;right:0;bottom:0;
   padding:11px 14px calc(18px + env(safe-area-inset-bottom));
   background:rgba(7,11,18,0.88);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
   border-top:1px solid rgba(87,242,161,0.08);
   display:flex;flex-direction:column;gap:9px;
-  transform:translateY(100%);opacity:0;
-  transition:transform 0.4s cubic-bezier(0.16,1,0.3,1),opacity 0.3s ease;
+  transform:translateY(100%);
+  transition:transform 0.4s cubic-bezier(0.16,1,0.3,1);
   z-index:10;touch-action:none}
-#tray.visible{transform:translateY(0);opacity:1}
+#tray.visible{transform:translateY(0)}
+#disperseToggle{width:30px;height:30px;border-radius:5px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  border:2px solid rgba(87,242,161,0.3);font-size:10px;color:rgba(87,242,161,0.5);
+  transition:transform 0.16s,border-color 0.16s,background 0.16s;touch-action:none;cursor:pointer}
+#disperseToggle.off{border-color:rgba(216,100,80,0.4);color:rgba(216,100,80,0.6);background:rgba(120,50,40,0.12)}
 #grab{position:absolute;top:5px;left:50%;transform:translateX(-50%);
   width:36px;height:3px;border-radius:2px;background:rgba(87,242,161,0.18)}
 #swatchRow{display:flex;gap:7px;overflow-x:auto;padding:2px 0 1px;
@@ -88,16 +100,21 @@ canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
   <div><div class="bbar" id="barP"><div class="fill"></div></div><div class="bbar-label">P</div></div>
 </div>
 <div id="tray">
+  <div id="trayTab">▲ TRAY</div>
   <div id="grab"></div>
   <div id="swatchRow">
     <div class="swatch active" style="background:#0d0b09" data-r="0.05" data-g="0.04" data-b="0.035"></div>
-    <div class="swatch" style="background:#765649" data-r="0.46" data-g="0.34" data-b="0.29"></div>
-    <div class="swatch" style="background:#4E555B" data-r="0.31" data-g="0.33" data-b="0.36"></div>
-    <div class="swatch" style="background:#586456" data-r="0.35" data-g="0.39" data-b="0.34"></div>
-    <div class="swatch" style="background:#714B48" data-r="0.44" data-g="0.29" data-b="0.28"></div>
+    <div class="swatch" style="background:#FF3434" data-r="1" data-g="0.20" data-b="0.20"></div>
+    <div class="swatch" style="background:#A77E58" data-r="0.65" data-g="0.49" data-b="0.34"></div>
+    <div class="swatch" style="background:#678652" data-r="0.4" data-g="0.52" data-b="0.32"></div>
+    <div class="swatch" style="background:#2C8CEC" data-r="0.17" data-g="0.54" data-b="0.93"></div>
+    <div class="swatch" style="background:#8B45B0" data-r="0.55" data-g="0.27" data-b="0.69"></div>
+    <div class="swatch" style="background:#E87830" data-r="0.91" data-g="0.47" data-b="0.19"></div>
+    <div class="swatch" style="background:#C8A84E" data-r="0.78" data-g="0.66" data-b="0.31"></div>
+    <div class="swatch" style="background:#A8A8B0" data-r="0.66" data-g="0.66" data-b="0.69"></div>
     <div class="rowDiv"></div>
-    <div id="jsonBtn" title="Load JSON">⊕</div>
     <div id="resetBtn">↺</div>
+    <div id="jsonBtn" title="Load JSON">⊕</div>
   </div>
   <div id="brushRow">
     <div class="bstyle active" data-style="round" title="Round">丸</div>
@@ -105,6 +122,8 @@ canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
     <div class="bstyle" data-style="side" title="Side">側</div>
     <div class="bstyle" data-style="rake" title="Rake">熊</div>
     <div class="bstyle" data-style="smudge" title="Smudge" style="font-size:11px">擦</div>
+    <div class="rowDiv"></div>
+    <div id="disperseToggle" title="Brush drain on/off">鎖</div>
     <div class="rowDiv"></div>
     <div class="size" data-r="3"><i style="width:5px;height:5px"></i></div>
     <div class="size active" data-r="8"><i style="width:9px;height:9px"></i></div>
@@ -495,8 +514,11 @@ function addDeposit(gx,gy,pressure,orientation,speed){
     appliedW+=wAdd;
     appliedP+=pAdd;
   }
-  brush.w=Math.max(0,brush.w-appliedW);
-  brush.p=Math.max(0,brush.p-appliedP);
+  // drain brush (gated by lock toggle — when locked, brush doesn't run dry)
+  if(disperseOn){
+    brush.w=Math.max(0,brush.w-appliedW);
+    brush.p=Math.max(0,brush.p-appliedP);
+  }
 
   // expand dirty rect
   expandDirty(x0-search,y0-search,x0+search,y0+search);
@@ -631,36 +653,30 @@ function simulateStep(){
       const w=water[i];
       if(w<0.001)continue;
 
-      // inline blocking factor for source
       const kSrc=K_BASE+K_GRAIN*tex[i]+K_PIG*Math.min(1,fPig[i]/PIGMENT_CAP)+K_PIN*pinTex[i];
       const pigConc=mPig[i]/(w+0.001);
 
-      // 4-connected neighbors
       const nb=[i-1,i+1,i-NX,i+NX];
       for(let n=0;n<4;n++){
         const j=nb[n];
 
-        // pinning check: if destination is dry, threshold must be exceeded
         if(water[j]<0.001){
           const sigma=SIGMA_BASE+SIGMA_PIN*pinTex[j]+SIGMA_GRAIN*tex[j];
-          if(w<sigma)continue; // pinned!
+          if(w<sigma)continue;
         }
 
-        // only flow from higher to lower water density
         const diff=w-water[j];
         if(diff<=0)continue;
 
-        // blocking factor at destination
         const kDst=K_BASE+K_GRAIN*tex[j]+K_PIG*Math.min(1,fPig[j]/PIGMENT_CAP)+K_PIN*pinTex[j];
         const kAvg=(kSrc+kDst)*0.5;
 
         let flow=SPREAD_RATE*diff*(1-kAvg);
-        flow=Math.min(flow,w*0.12); // cap per-neighbor drain
+        flow=Math.min(flow,w*0.12);
 
         wDelta[i]-=flow;
         wDelta[j]+=flow;
 
-        // pigment carried by water, hindered by grain
         const hind=HINDRANCE*tex[i];
         let pigFlow=flow*pigConc*(1-hind);
         pigFlow=Math.min(pigFlow,mPig[i]*0.12);
@@ -672,7 +688,7 @@ function simulateStep(){
     }
   }
 
-  // ── Apply deltas ──
+  // Apply deltas
   for(let y=sy0;y<=sy1;y++){
     for(let x=sx0;x<=sx1;x++){
       const i=y*NX+x;
@@ -681,7 +697,7 @@ function simulateStep(){
     }
   }
 
-  // ── Pass 2: evaporation + fixation ──
+  // ── Pass 2: evaporation + fixation (always runs) ──
   let stillWet=false;
   let newX0=NX,newY0=NY,newX1=0,newY1=0;
 
@@ -833,8 +849,6 @@ const RAMP_DRAIN=0.06; // 10x slower drain
 
 function keepOpen(){clearTimeout(trayTimer)}
 function schedClose(ms=3500){clearTimeout(trayTimer);trayTimer=setTimeout(closeTray,ms)}
-function openTray(){tray.classList.add('visible');schedClose(4500)}
-function closeTray(){clearTimeout(trayTimer);tray.classList.remove('visible');holding=null}
 
 function tickHold(now){
   if(!holding)return;
@@ -865,11 +879,10 @@ function bindHold(el,which){
 bindHold(document.getElementById('dipInk'),'ink');
 bindHold(document.getElementById('dipWater'),'water');
 // ═══════════════════════════════════════════════════════
-// NAPKIN CANVAS — dab to preview current brush tone
+// NAPKIN CANVAS — touch-tracking paint surface
 // ═══════════════════════════════════════════════════════
 const napCvs=document.getElementById('napCanvas');
 const napCtx=napCvs.getContext('2d');
-let napDabX=14;
 const NAP_W=360,NAP_H=120;
 
 function initNapkin(){
@@ -884,92 +897,176 @@ function initNapkin(){
     napCtx.fillStyle=`rgb(${g},${g-4},${g-10})`;
     napCtx.fillRect(x,y,hash11(i*7.1)*3+1,1);
   }
-  napDabX=14;
 }
 
-function napkinDab(){
-  if(brush.w<1&&brush.p<1)return;
+function napDabAt(cx,cy){
+  if(brush.w<0.5&&brush.p<0.5)return;
   const wFrac=brush.w/(brush.w+brush.p+1e-12);
   const pigDensity=brush.p/BRUSH_P_CAP;
   const alpha=Math.min(1,pigDensity*(0.3+0.7*(1-wFrac*0.6)));
   const r=Math.round(inkR*255);
   const g=Math.round(inkG*255);
   const b=Math.round(inkB*255);
+  const col=`rgb(${r},${g},${b})`;
+  const dabR=Math.max(2, brushRadius*0.45*(0.6+pigDensity*0.4));
 
-  const cx=napDabX;
-  const cy=NAP_H*0.45;
-  const dabR=5+pigDensity*10;
+  napCtx.fillStyle=col;
+  napCtx.strokeStyle=col;
 
-  napCtx.globalAlpha=Math.max(0.05,alpha);
-  napCtx.fillStyle=`rgb(${r},${g},${b})`;
-  napCtx.beginPath();
-  napCtx.arc(cx,cy,dabR,0,Math.PI*2);
-  napCtx.fill();
-
-  if(wFrac>0.3){
-    napCtx.globalAlpha=Math.max(0.03,alpha*0.18*wFrac);
+  if(brushStyle==='point'){
+    // tight small dot
+    const pr=dabR*0.5;
+    napCtx.globalAlpha=Math.max(0.06,alpha*0.8);
     napCtx.beginPath();
-    napCtx.arc(cx,cy,dabR*(1+wFrac*0.9),0,Math.PI*2);
+    napCtx.arc(cx,cy,pr,0,Math.PI*2);
+    napCtx.fill();
+
+  }else if(brushStyle==='side'){
+    // wide flat ellipse
+    napCtx.globalAlpha=Math.max(0.04,alpha*0.55);
+    napCtx.save();
+    napCtx.translate(cx,cy);
+    napCtx.beginPath();
+    napCtx.ellipse(0,0,dabR*1.4,dabR*0.5,0,0,Math.PI*2);
+    napCtx.fill();
+    napCtx.restore();
+
+  }else if(brushStyle==='rake'){
+    // separated bristle marks
+    const bristles=Math.max(3,Math.floor(dabR*0.8));
+    const spacing=dabR*2/bristles;
+    napCtx.globalAlpha=Math.max(0.05,alpha*0.65);
+    for(let i=0;i<bristles;i++){
+      const bx=cx+(i-bristles/2)*spacing;
+      napCtx.beginPath();
+      napCtx.arc(bx,cy,spacing*0.35,0,Math.PI*2);
+      napCtx.fill();
+    }
+
+  }else if(brushStyle==='smudge'){
+    // soft smear - larger, very transparent
+    napCtx.globalAlpha=Math.max(0.03,alpha*0.25);
+    napCtx.beginPath();
+    napCtx.arc(cx,cy,dabR*1.3,0,Math.PI*2);
+    napCtx.fill();
+    // soft edge
+    napCtx.globalAlpha=Math.max(0.02,alpha*0.1);
+    napCtx.beginPath();
+    napCtx.arc(cx,cy,dabR*1.8,0,Math.PI*2);
+    napCtx.fill();
+
+  }else{
+    // round - default
+    napCtx.globalAlpha=Math.max(0.04,alpha*0.6);
+    napCtx.beginPath();
+    napCtx.arc(cx,cy,dabR,0,Math.PI*2);
     napCtx.fill();
   }
 
-  if(pigDensity>0.08){
-    napCtx.globalAlpha=Math.max(0.05,alpha*0.5);
-    napCtx.lineWidth=1.2;
-    napCtx.strokeStyle=`rgb(${r},${g},${b})`;
+  // water bloom for all styles
+  if(wFrac>0.25){
+    napCtx.globalAlpha=Math.max(0.02,alpha*0.10*wFrac);
     napCtx.beginPath();
-    napCtx.arc(cx,cy,dabR*0.85,0,Math.PI*2);
+    napCtx.arc(cx,cy,dabR*(1+wFrac*0.8),0,Math.PI*2);
+    napCtx.fill();
+  }
+
+  // edge darkening for non-smudge
+  if(pigDensity>0.06&&brushStyle!=='smudge'){
+    napCtx.globalAlpha=Math.max(0.03,alpha*0.3);
+    napCtx.lineWidth=0.6;
+    napCtx.beginPath();
+    napCtx.arc(cx,cy,dabR*0.75,0,Math.PI*2);
     napCtx.stroke();
   }
 
   napCtx.globalAlpha=1;
-  napDabX+=dabR*2.5+6;
-  if(napDabX>NAP_W-14) initNapkin();
 
-  brush.w=Math.max(0,brush.w-brush.w*0.02);
-  brush.p=Math.max(0,brush.p-brush.p*0.02);
+  brush.w=Math.max(0,brush.w-brush.w*0.008);
+  brush.p=Math.max(0,brush.p-brush.p*0.008);
   updateFills();
+}
+
+function napClientToCanvas(clientX,clientY){
+  const rect=napCvs.getBoundingClientRect();
+  return[
+    (clientX-rect.left)/rect.width*NAP_W,
+    (clientY-rect.top)/rect.height*NAP_H
+  ];
 }
 
 setTimeout(initNapkin,300);
 window.addEventListener('resize',()=>setTimeout(initNapkin,100));
 
-// napkin: tap = dab test, hold = drain (position determines what drains)
+// napkin: touch/drag = paint test marks, hold edges = drain
 (function setupNapkin(){
   const nap=document.getElementById('napkin');
   let napHoldTimer=null;
   let napHolding=false;
+  let napDrawing=false;
+  let lastNapX=0,lastNapY=0;
 
   nap.addEventListener('pointerdown',e=>{
     e.preventDefault();e.stopPropagation();
+    nap.setPointerCapture(e.pointerId);
     napHolding=false;
+    napDrawing=false;
+
     const rect=nap.getBoundingClientRect();
     const xFrac=(e.clientX-rect.left)/rect.width;
-    // determine drain zone by horizontal position
     const drainType=xFrac<0.33?'napInk':xFrac>0.66?'napWater':'napBoth';
 
+    const[cx,cy]=napClientToCanvas(e.clientX,e.clientY);
+    lastNapX=cx;lastNapY=cy;
+
     napHoldTimer=setTimeout(()=>{
-      napHolding=true;
-      startHold(drainType);
-    },250);
+      if(!napDrawing){
+        napHolding=true;
+        startHold(drainType);
+      }
+    },300);
+
+    // immediate first dab
+    napDabAt(cx,cy);
+    napDrawing=true;
     keepOpen();
+  });
+
+  nap.addEventListener('pointermove',e=>{
+    if(!napDrawing&&!napHolding)return;
+    if(napHolding)return;
+    e.preventDefault();
+
+    // movement detected — cancel hold timer, we're painting
+    clearTimeout(napHoldTimer);
+
+    const[cx,cy]=napClientToCanvas(e.clientX,e.clientY);
+    const dx=cx-lastNapX,dy=cy-lastNapY;
+    const dist=Math.sqrt(dx*dx+dy*dy);
+    if(dist<2)return;
+
+    // interpolate dabs along drag
+    const steps=Math.max(1,Math.ceil(dist/3));
+    for(let i=1;i<=steps;i++){
+      const t=i/steps;
+      napDabAt(lastNapX+dx*t,lastNapY+dy*t);
+    }
+    lastNapX=cx;lastNapY=cy;
   });
 
   nap.addEventListener('pointerup',e=>{
     e.preventDefault();
     clearTimeout(napHoldTimer);
-    if(napHolding){
-      stopHold();
-      napHolding=false;
-    }else{
-      // quick tap = dab test
-      napkinDab();
-    }
+    if(napHolding){stopHold();}
+    napHolding=false;
+    napDrawing=false;
   });
 
   nap.addEventListener('pointercancel',e=>{
     clearTimeout(napHoldTimer);
-    if(napHolding){stopHold();napHolding=false;}
+    if(napHolding){stopHold();}
+    napHolding=false;
+    napDrawing=false;
   });
 })();
 
@@ -1017,21 +1114,155 @@ document.getElementById('resetBtn').addEventListener('pointerdown',e=>{
   e.preventDefault();e.stopPropagation();resetAll();
 });
 
-let tapCount=0,tapTimer=null;
-canvas.addEventListener('pointerdown',e=>{
-  if(e.pointerType==='mouse')return;
-  tapCount++;clearTimeout(tapTimer);
-  tapTimer=setTimeout(()=>{tapCount=0},300);
-  if(tapCount>=2){tapCount=0;openTray()}
+// ── Tray tab toggle ──
+const trayTab=document.getElementById('trayTab');
+let trayOpen=false;
+
+function openTray(){
+  tray.classList.add('visible');
+  trayTab.textContent='▼ TRAY';
+  trayOpen=true;
+  schedClose(6000);
+}
+function closeTray(){
+  clearTimeout(trayTimer);
+  tray.classList.remove('visible');
+  trayTab.textContent='▲ TRAY';
+  trayOpen=false;
+  holding=null;
+  // fade napkin 33% toward clean
+  napCtx.globalAlpha=0.33;
+  napCtx.fillStyle='#ece5d2';
+  napCtx.fillRect(0,0,NAP_W,NAP_H);
+  napCtx.globalAlpha=1;
+}
+
+trayTab.addEventListener('pointerdown',e=>{
+  e.preventDefault();e.stopPropagation();
+  if(trayOpen) closeTray();
+  else openTray();
 });
+
+document.getElementById('grab').addEventListener('pointerdown',e=>{
+  e.preventDefault();e.stopPropagation();closeTray();
+});
+
+// swipe up from bottom still works
 let swipeY=0;
 canvas.addEventListener('pointerdown',e=>{swipeY=e.clientY});
 canvas.addEventListener('pointerup',e=>{
   if(swipeY-e.clientY>45&&swipeY>window.innerHeight*0.88)openTray();
 });
-document.getElementById('grab').addEventListener('pointerdown',e=>{
-  e.preventDefault();e.stopPropagation();closeTray();
+
+// ── Dispersion toggle ──
+let disperseOn=true;
+const disperseBtn=document.getElementById('disperseToggle');
+disperseBtn.addEventListener('pointerdown',e=>{
+  e.preventDefault();e.stopPropagation();
+  disperseOn=!disperseOn;
+  disperseBtn.classList.toggle('off',!disperseOn);
+  disperseBtn.title=disperseOn?'Brush drains normally':'Brush locked — infinite ink';
+  keepOpen();
 });
+
+// ═══════════════════════════════════════════════════════
+// SPLATTER — animated particle system (kinetic spray)
+// ═══════════════════════════════════════════════════════
+let splatParticles=[];
+
+class SplatParticle{
+  constructor(x,y,vx,vy,radius,r,g,b,id){
+    this.x=x;this.y=y;this.vx=vx;this.vy=vy;
+    this.radius=radius;this.r=r;this.g=g;this.b=b;this.id=id;
+    this.alpha=0.85;
+    this.friction=0.92;
+    this.decay=0.004+hash21(id,9.4)*0.008;
+    this.settled=false;
+  }
+  update(){
+    if(this.settled)return;
+    this.x+=this.vx;this.y+=this.vy;
+    this.vx*=this.friction;this.vy*=this.friction;
+    this.alpha-=this.decay;
+    if(this.alpha<=0.03||Math.hypot(this.vx,this.vy)<0.08){
+      this.settled=true;
+      // deposit to grid on landing
+      const gx=Math.round(this.x),gy=Math.round(this.y);
+      if(gx>=0&&gx<NX&&gy>=0&&gy<NY){
+        const dropR=Math.ceil(this.radius);
+        const str=Math.max(0.05,this.alpha*0.6);
+        for(let dy=-dropR-1;dy<=dropR+1;dy++){
+          for(let dx=-dropR-1;dx<=dropR+1;dx++){
+            const px=gx+dx,py=gy+dy;
+            if(px<0||px>=NX||py<0||py>=NY)continue;
+            const d2=dx*dx+dy*dy;
+            if(d2>this.radius*this.radius*4)continue;
+            const wt=Math.exp(-d2/(this.radius*this.radius*0.8))*str;
+            if(wt<0.005)continue;
+            const idx=py*NX+px;
+            water[idx]=Math.min(WATER_CAP,water[idx]+wt*0.3);
+            const existing=mPig[idx];
+            const pAdd=wt*0.4;
+            const total=existing+pAdd;
+            if(total>0){
+              const ew=existing/total,nw=pAdd/total;
+              mR[idx]=mR[idx]*ew+(this.r/255)*nw;
+              mG[idx]=mG[idx]*ew+(this.g/255)*nw;
+              mB[idx]=mB[idx]*ew+(this.b/255)*nw;
+            }
+            mPig[idx]=total;
+            expandDirty(px-1,py-1,px+1,py+1);
+          }
+        }
+        hasWet=true;
+      }
+    }
+  }
+}
+
+function triggerKineticSplatter(px,py,angle,speed){
+  const seed=Math.floor(px)*3.1+Math.floor(py)*7.7+Math.floor(angle*57.3)*13.9;
+  const scaleMod=0.45;
+  const dropletCount=Math.floor(Math.min(40,speed*(2+hash21(seed,0.77)*2)));
+  if(dropletCount<3)return;
+  const r=Math.round(inkR*255),g=Math.round(inkG*255),b=Math.round(inkB*255);
+
+  for(let i=0;i<dropletCount;i++){
+    // gaussian-ish angular spread
+    const n1=hash21(seed+i*2.4,i*0.73)-0.5;
+    const n2=hash21(seed+i*2.4+1000,i*1.1)-0.5;
+    const gaussNoise=(n1+n2)*1.4;
+    const satAngle=angle+gaussNoise*0.25;
+    const satVelocity=(speed*0.4)+(hash21(seed+1.3,i)*speed*0.5);
+    const vx=Math.cos(satAngle)*satVelocity*scaleMod;
+    const vy=Math.sin(satAngle)*satVelocity*scaleMod;
+    const refSize=Math.min(140,speed*10)*scaleMod;
+    const sRadius=Math.max(0.4,hash21(seed+2.6,i)*refSize*0.08);
+    splatParticles.push(new SplatParticle(px,py,vx,vy,sRadius,r,g,b,seed+i));
+  }
+
+  // cost brush load
+  brush.w=Math.max(0,brush.w-brush.w*0.06);
+  brush.p=Math.max(0,brush.p-brush.p*0.06);
+  updateFills();
+}
+
+// flick detection
+let flickVX=0,flickVY=0,flickT=0;
+let strokePts=[];
+
+function maybeFlick(){
+  if(strokePts.length<3)return;
+  const last=strokePts[strokePts.length-1];
+  const prev=strokePts[Math.max(0,strokePts.length-8)];
+  const dx=last.x-prev.x,dy=last.y-prev.y;
+  const dt=(last.t-prev.t)||1;
+  const spd=Math.hypot(dx,dy)/dt*15;
+  const ang=Math.atan2(dy,dx);
+  if(spd>24){
+    triggerKineticSplatter(last.x,last.y,ang,spd);
+  }
+}
 
 // ═══════════════════════════════════════════════════════
 // DRAWING — pointer events
@@ -1050,6 +1281,7 @@ canvas.addEventListener('pointerdown',e=>{
   const[gx,gy]=clientToGrid(e.clientX,e.clientY);
   drawing=true;lastGX=gx;lastGY=gy;lastTime=performance.now();
   strokeSeed=performance.now()%1000;
+  strokePts=[{x:gx,y:gy,t:performance.now()}];
   if(brushStyle==='smudge'){
     smudgeBuf.r=0;smudgeBuf.g=0;smudgeBuf.b=0;smudgeBuf.amt=0;
     smudgeDab(gx,gy,getPressure(e));
@@ -1061,12 +1293,24 @@ canvas.addEventListener('pointerdown',e=>{
 canvas.addEventListener('pointermove',e=>{
   if(!drawing)return;
   const[gx,gy]=clientToGrid(e.clientX,e.clientY);
+  const now=performance.now();
+
   drawSegment(lastGX,lastGY,gx,gy,getPressure(e));
-  lastGX=gx;lastGY=gy;lastTime=performance.now();
+
+  // track points for flick detection
+  strokePts.push({x:gx,y:gy,t:now});
+  if(strokePts.length>12)strokePts.shift();
+
+  lastGX=gx;lastGY=gy;lastTime=now;
 });
 
 canvas.addEventListener('pointerup',e=>{
+  // check for flick at end of stroke
+  if(drawing&&brushStyle!=='smudge'){
+    maybeFlick();
+  }
   drawing=false;
+  strokePts=[];
   try{canvas.releasePointerCapture(e.pointerId)}catch(_){}
 });
 canvas.addEventListener('pointercancel',()=>{drawing=false});
@@ -1222,7 +1466,33 @@ function importJsonLayer(jsonStr) {
 function animate(){
   simulateStep();
   tickHold(performance.now());
+
+  // update splat particles
+  for(let i=splatParticles.length-1;i>=0;i--){
+    splatParticles[i].update();
+    if(splatParticles[i].settled&&splatParticles[i].alpha<=0.02){
+      splatParticles.splice(i,1);
+    }
+  }
+
   render();
+
+  // draw flying particles on top of render
+  if(splatParticles.length>0){
+    const cCtx=canvas.getContext('2d');
+    for(const p of splatParticles){
+      if(p.settled)continue;
+      // convert grid coords to canvas pixels
+      const px=p.x*CELL,py=p.y*CELL;
+      cCtx.globalAlpha=p.alpha;
+      cCtx.fillStyle=`rgb(${p.r},${p.g},${p.b})`;
+      cCtx.beginPath();
+      cCtx.arc(px,py,Math.max(0.5,p.radius*CELL*0.3),0,Math.PI*2);
+      cCtx.fill();
+    }
+    cCtx.globalAlpha=1;
+  }
+
   updateFills();
   requestAnimationFrame(animate);
 }
