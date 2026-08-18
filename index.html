@@ -150,10 +150,9 @@ canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
     <div class="rowDiv"></div>
     <div id="disperseToggle" title="Brush drain on/off">鎖</div>
     <div class="rowDiv"></div>
-    <div class="size" data-r="3"><i style="width:5px;height:5px"></i></div>
-    <div class="size active" data-r="8"><i style="width:9px;height:9px"></i></div>
-    <div class="size" data-r="16"><i style="width:15px;height:15px"></i></div>
-    <div class="size" data-r="28"><i style="width:21px;height:21px"></i></div>
+    <div class="size active" data-r="3"><i style="width:5px;height:5px"></i></div>
+    <div class="size" data-r="8"><i style="width:11px;height:11px"></i></div>
+    <div class="size" data-r="20"><i style="width:19px;height:19px"></i></div>
   </div>
   <div id="dipRow">
     <div class="dip" id="dipInk"><div class="fill"></div><span>墨 ink</span></div>
@@ -175,7 +174,7 @@ const CELL=1;
 const WATER_CAP=1.0,PIGMENT_CAP=1.98;
 const BRUSH_RAD=4.0,BRUSH_W_CAP=50000,BRUSH_P_CAP=40000,DEP_W=0.0015,DEP_P=0.0015;
 const INK_DARK=12.0,PAP_R=236,PAP_G=229,PAP_B=210;
-const SPREAD_RATE=0.12,EVAP_RATE=0.004,EDGE_EVAP_MULT=0.6,FIX_RATE=0.12,HINDRANCE=0.55;
+const SPREAD_RATE=0.2,EVAP_RATE=0.08,EDGE_EVAP_MULT=0.6,FIX_RATE=0.12,HINDRANCE=0.55;
 const SIGMA_BASE=0.08,SIGMA_PIN=0.30,SIGMA_GRAIN=0.12;
 const K_BASE=0.04,K_GRAIN=0.42,K_PIG=0.28,K_PIN=0.18;
 
@@ -193,7 +192,7 @@ const paperPixels=new Uint8ClampedArray(W_PX*H_PX*4);
 const imgData=ctx.createImageData(W_PX,H_PX);
 
 const brush={w:BRUSH_W_CAP*40,p:BRUSH_P_CAP*0.8};
-let brushRadius=2,inkR=0.05,inkG=0.04,inkB=0.035,brushStyle='round';
+let brushRadius=1,inkR=0.05,inkG=0.04,inkB=0.035,brushStyle='round';
 let dirtyX0=NX,dirtyY0=NY,dirtyX1=0,dirtyY1=0,hasWet=false;
 
 function expandDirty(x0,y0,x1,y1){dirtyX0=Math.max(0,Math.min(dirtyX0,x0|0));dirtyY0=Math.max(0,Math.min(dirtyY0,y0|0));dirtyX1=Math.min(NX-1,Math.max(dirtyX1,Math.ceil(x1)));dirtyY1=Math.min(NY-1,Math.max(dirtyY1,Math.ceil(y1)));hasWet=true}
@@ -240,10 +239,10 @@ function addDeposit(gx,gy,pressure,orientation,speed){
     const fx=px-gx,fy=py-gy,u=fx*cosT+fy*sinT,v=-fx*sinT+fy*cosT;
     const norm=(u/Math.max(0.3,a))**2+(v/Math.max(0.3,b))**2;if(norm>9)continue;
     let wt=Math.exp(-0.5*norm);
-    if(brushStyle==='rake'){const rakeFreq=Math.min(0.6,1.0/Math.max(0.5,baseRad*0.15));wt*=Math.max(0,Math.cos(v*rakeFreq*Math.PI))}
+    if(brushStyle==='rake'){const rakeFreq=Math.min(0.6,1.0/Math.max(0.5,baseRad*0.15));wt*=Math.max(0,Math.cos(v*rakeFreq*Math.PI))*(hash21(px*4.3,py*2.7+strokeSeed)>0.15?1:0)}
     if(brushStyle==='point')wt*=wt*wt;
     const bristleFreq=brushStyle==='rake'?0:Math.min(0.7,1.5/Math.max(1.0,baseRad*0.4));
-    if(bristleFreq>0){const bristleAmp=0.05+0.65*dryness;const bristlePhase=hash21(gx*0.13+strokeSeed,gy*0.29)*Math.PI*2;wt*=(1-bristleAmp)+bristleAmp*Math.cos(v*bristleFreq*Math.PI+bristlePhase)}
+    if(bristleFreq>0){const bristleAmp=(0.05+0.65*dryness)*(brushStyle==='side'?0.3:1);const bristlePhase=hash21(gx*0.13+strokeSeed,gy*0.29)*Math.PI*2;wt*=(1-bristleAmp)+bristleAmp*Math.cos(v*bristleFreq*Math.PI+bristlePhase)}
     const grain=tex[py*NX+px];wt*=(1-grainAmp)+grainAmp*grain;
     const catchNoise=hash21(px*3.17+strokeSeed*0.43,py*5.31-strokeSeed*1.7);
     const catchThresh=0.22*dryness*dryness+0.04;
@@ -251,6 +250,7 @@ function addDeposit(gx,gy,pressure,orientation,speed){
     const microGap=hash21(px*17.31+strokeSeed*2.1,py*13.71-strokeSeed);if(microGap<0.04*dryness)wt=0;
     if(skipThresh>0.015){const lane=Math.round(v/Math.max(1.5,b*0.4));const laneNoise=hash21(lane*7.13+strokeSeed,lane*3.71-strokeSeed*0.7);if(laneNoise<skipThresh)wt=0;else if(laneNoise<skipThresh*1.4)wt*=0.3}
     if(norm>1.2){const edgeSteep=1+2.8*dryness;const edgeJitter=1+hash21(px*9.1+strokeSeed,py*4.3)*0.6*dryness;wt*=Math.pow(Math.max(0,1-norm/(9*edgeJitter)),edgeSteep)}
+
     if(wt<0.005)continue;samples.push({idx:py*NX+px,w:wt});totalWt+=wt}
   if(speed>3&&dryness<0.7){const splatCount=Math.floor(hash21(gx+strokeSeed,gy-strokeSeed)*4*wFrac*pressure);for(let sp=0;sp<splatCount;sp++){const angle=hash21(sp*13.7+strokeSeed,sp*7.3+gx)*Math.PI*2;const dist=Math.max(a,b)*(1.8+hash21(sp*3.1+strokeSeed,sp*11.9)*2.5);const spx=Math.round(gx+Math.cos(angle)*dist),spy=Math.round(gy+Math.sin(angle)*dist);if(spx>=0&&spx<NX&&spy>=0&&spy<NY){const spIdx=spy*NX+spx;const spWt=0.15+hash21(sp*5.7,strokeSeed)*0.25;samples.push({idx:spIdx,w:spWt*totalWt*0.008});totalWt+=spWt*totalWt*0.008}}}
   if(totalWt<=0)return;
@@ -278,7 +278,8 @@ function simulateStep(){
   for(let y=sy0;y<=sy1;y++)for(let x=sx0;x<=sx1;x++){const i=y*NX+x;const w=water[i];if(w<0.001)continue;const kSrc=K_BASE+K_GRAIN*tex[i]+K_PIG*Math.min(1,fPig[i]/PIGMENT_CAP)+K_PIN*pinTex[i];const pigConc=mPig[i]/(w+0.001);const nb=[i-1,i+1,i-NX,i+NX];for(let n=0;n<4;n++){const j=nb[n];if(water[j]<0.001){const sigma=SIGMA_BASE+SIGMA_PIN*pinTex[j]+SIGMA_GRAIN*tex[j];if(w<sigma)continue}const diff=w-water[j];if(diff<=0)continue;const kDst=K_BASE+K_GRAIN*tex[j]+K_PIG*Math.min(1,fPig[j]/PIGMENT_CAP)+K_PIN*pinTex[j];const kAvg=(kSrc+kDst)*0.5;let flow=SPREAD_RATE*diff*(1-kAvg);flow=Math.min(flow,w*0.12);wDelta[i]-=flow;wDelta[j]+=flow;const hind=HINDRANCE*tex[i];let pigFlow=flow*pigConc*(1-hind);pigFlow=Math.min(pigFlow,mPig[i]*0.12);if(pigFlow>0.0001){pDelta[i]-=pigFlow;pDelta[j]+=pigFlow}}}
   for(let y=sy0;y<=sy1;y++)for(let x=sx0;x<=sx1;x++){const i=y*NX+x;if(wDelta[i]!==0)water[i]=Math.max(0,water[i]+wDelta[i]);if(pDelta[i]!==0)mPig[i]=Math.max(0,mPig[i]+pDelta[i])}
   let stillWet=false;let newX0=NX,newY0=NY,newX1=0,newY1=0;
-  for(let y=sy0;y<=sy1;y++)for(let x=sx0;x<=sx1;x++){const i=y*NX+x;const w=water[i];if(w<0.001&&mPig[i]<0.001)continue;if(w>0.001){stillWet=true;if(x<newX0)newX0=x;if(y<newY0)newY0=y;if(x>newX1)newX1=x;if(y>newY1)newY1=y;let wetN=0;if(water[i-1]>0.01)wetN++;if(water[i+1]>0.01)wetN++;if(water[i-NX]>0.01)wetN++;if(water[i+NX]>0.01)wetN++;const edgeFac=1+(4-wetN)*EDGE_EVAP_MULT;water[i]=Math.max(0,w-EVAP_RATE*w*edgeFac);const dry=1-water[i]/WATER_CAP;const fix=FIX_RATE*dry*dry*absorb[i];const pRoom=Math.max(0,PIGMENT_CAP-fPig[i]);const amount=Math.min(mPig[i]*fix,pRoom);if(amount>0.0001){const existing=fPig[i];const total=existing+amount;const ew=existing/total,nw=amount/total;const bR=fR[i]*ew+mR[i]*nw,bG=fG[i]*ew+mG[i]*nw,bB=fB[i]*ew+mB[i]*nw;fR[i]=existing>0.001?Math.min(fR[i],bR):bR;fG[i]=existing>0.001?Math.min(fG[i],bG):bG;fB[i]=existing>0.001?Math.min(fB[i],bB):bB;fPig[i]=total;mPig[i]-=amount}}
+  for(let y=sy0;y<=sy1;y++)for(let x=sx0;x<=sx1;x++){const i=y*NX+x;const w=water[i];if(w<0.001&&mPig[i]<0.001)continue;if(w>0.001){stillWet=true;if(x<newX0)newX0=x;if(y<newY0)newY0=y;if(x>newX1)newX1=x;if(y>newY1)newY1=y;let wetN=0;if(water[i-1]>0.01)wetN++;if(water[i+1]>0.01)wetN++;if(water[i-NX]>0.01)wetN++;if(water[i+NX]>0.01)wetN++;const edgeFac=1+(4-wetN)*EDGE_EVAP_MULT;water[i]=Math.max(0,w-EVAP_RATE*w*edgeFac);const dry=1-water[i]/WATER_CAP;const fix=FIX_RATE*dry*dry*absorb[i];const pRoom=Math.max(0,PIGMENT_CAP-fPig[i]);const amount=Math.min(mPig[i]*fix,pRoom);if(amount>0.0001){const existing=fPig[i];const total=existing+amount;const ew=existing/total,nw=amount/total;const bR=fR[i]*ew+mR[i]*nw,bG=fG[i]*ew+mG[i]*nw,bB=fB[i]*ew+mB[i]*nw;fR[i]=bR;fG[i]=bG;fB[i]=bB;fPig[i]=total;mPig[i]-=amount}}
+
     if(water[i]<0.005&&mPig[i]>0.001){const lockAmt=Math.min(mPig[i],Math.max(0,PIGMENT_CAP-fPig[i]));if(lockAmt>0){const ex=fPig[i],tot=ex+lockAmt;if(tot>0){const ew=ex/tot,nw=lockAmt/tot;const bR=fR[i]*ew+mR[i]*nw,bG=fG[i]*ew+mG[i]*nw,bB=fB[i]*ew+mB[i]*nw;fR[i]=ex>0.001?Math.min(fR[i],bR):bR;fG[i]=ex>0.001?Math.min(fG[i],bG):bG;fB[i]=ex>0.001?Math.min(fB[i],bB):bB;fPig[i]=tot}}mPig[i]=0;water[i]=0}}
   if(stillWet){dirtyX0=Math.max(0,newX0-2);dirtyY0=Math.max(0,newY0-2);dirtyX1=Math.min(NX-1,newX1+2);dirtyY1=Math.min(NY-1,newY1+2)}else{hasWet=false;dirtyX0=NX;dirtyY0=NY;dirtyX1=0;dirtyY1=0}
 }
@@ -338,7 +339,7 @@ palToggle.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagatio
   if(!newPage.querySelector('.swatch.active')){const first=newPage.querySelector('.swatch');first.classList.add('active');inkR=parseFloat(first.dataset.r);inkG=parseFloat(first.dataset.g);inkB=parseFloat(first.dataset.b)}
   else{const act=newPage.querySelector('.swatch.active');inkR=parseFloat(act.dataset.r);inkG=parseFloat(act.dataset.g);inkB=parseFloat(act.dataset.b)}keepOpen()});
 
-document.querySelectorAll('#brushRow .size').forEach(sz=>{sz.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();brushRadius=Number(sz.dataset.r);document.querySelectorAll('#brushRow .size').forEach(s=>s.classList.remove('active'));sz.classList.add('active');schedClose()})});
+document.querySelectorAll('#brushRow .size').forEach(sz=>{sz.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();const r=Number(sz.dataset.r);brushRange=BRUSH_RANGES[r]||[r*0.5,r*2];brushRadius=brushRange[0]+0.5*(brushRange[1]-brushRange[0]);document.querySelectorAll('#brushRow .size').forEach(s=>s.classList.remove('active'));sz.classList.add('active');schedClose()})});
 document.querySelectorAll('#brushRow .bstyle').forEach(bs=>{bs.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();document.querySelectorAll('#brushRow .bstyle').forEach(s=>s.classList.remove('active'));bs.classList.add('active');brushStyle=bs.dataset.style;schedClose()})});
 
 function resetAll(){water.fill(0);mPig.fill(0);fPig.fill(0);mR.fill(0);mG.fill(0);mB.fill(0);fR.fill(0);fG.fill(0);fB.fill(0);hasWet=false;dirtyX0=NX;dirtyY0=NY;dirtyX1=0;dirtyY1=0;updateFills();render();if(typeof initNapkin==='function')initNapkin()}
@@ -357,20 +358,23 @@ disperseBtn.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagat
 
 // ═══ SPLATTER ═══
 let splatParticles=[];
-class SplatParticle{constructor(x,y,vx,vy,radius,r,g,b,id){this.x=x;this.y=y;this.vx=vx;this.vy=vy;this.radius=radius;this.r=r;this.g=g;this.b=b;this.id=id;this.alpha=0.85;this.friction=0.92;this.decay=0.004+hash21(id,9.4)*0.008;this.settled=false}
+class SplatParticle{constructor(x,y,vx,vy,radius,r,g,b,id){this.x=x;this.y=y;this.vx=vx;this.vy=vy;this.radius=radius;this.r=r;this.g=g;this.b=b;this.id=id;this.alpha=0.85;this.friction=0.92;this.decay=0.008+hash21(id,9.4)*0.008;this.settled=false}
   update(){if(this.settled)return;this.x+=this.vx;this.y+=this.vy;this.vx*=this.friction;this.vy*=this.friction;this.alpha-=this.decay;if(this.alpha<=0.03||Math.hypot(this.vx,this.vy)<0.08){this.settled=true;const gx=Math.round(this.x),gy=Math.round(this.y);if(gx>=0&&gx<NX&&gy>=0&&gy<NY){const dropR=Math.ceil(this.radius);const str=Math.max(0.05,this.alpha*0.6);for(let dy=-dropR-1;dy<=dropR+1;dy++)for(let dx=-dropR-1;dx<=dropR+1;dx++){const px=gx+dx,py=gy+dy;if(px<0||px>=NX||py<0||py>=NY)continue;const d2=dx*dx+dy*dy;if(d2>this.radius*this.radius*4)continue;const wt=Math.exp(-d2/(this.radius*this.radius*0.8))*str;if(wt<0.005)continue;const idx=py*NX+px;water[idx]=Math.min(WATER_CAP,water[idx]+wt*0.3);const existing=mPig[idx];const pAdd=wt*0.4;const total=existing+pAdd;if(total>0){const ew=existing/total,nw=pAdd/total;mR[idx]=mR[idx]*ew+(this.r/255)*nw;mG[idx]=mG[idx]*ew+(this.g/255)*nw;mB[idx]=mB[idx]*ew+(this.b/255)*nw}mPig[idx]=total;expandDirty(px-1,py-1,px+1,py+1)}hasWet=true}}}}
 
-function triggerKineticSplatter(px,py,angle,speed){const seed=Math.floor(px)*3.1+Math.floor(py)*7.7+Math.floor(angle*57.3)*13.9;const scaleMod=0.45;const dropletCount=Math.floor(Math.min(40,speed*(2+hash21(seed,0.77)*2)));if(dropletCount<3)return;const r=Math.round(inkR*255),g=Math.round(inkG*255),b=Math.round(inkB*255);for(let i=0;i<dropletCount;i++){const n1=hash21(seed+i*2.4,i*0.73)-0.5,n2=hash21(seed+i*2.4+1000,i*1.1)-0.5;const gaussNoise=(n1+n2)*1.4;const satAngle=angle+gaussNoise*0.25;const satVelocity=(speed*0.4)+(hash21(seed+1.3,i)*speed*0.5);const vx=Math.cos(satAngle)*satVelocity*scaleMod,vy=Math.sin(satAngle)*satVelocity*scaleMod;const refSize=Math.min(140,speed*10)*scaleMod;const sRadius=Math.max(0.4,hash21(seed+2.6,i)*refSize*0.08);splatParticles.push(new SplatParticle(px,py,vx,vy,sRadius,r,g,b,seed+i))}brush.w=Math.max(0,brush.w-brush.w*0.06);brush.p=Math.max(0,brush.p-brush.p*0.06);updateFills()}
+function triggerKineticSplatter(px,py,angle,speed){const seed=Math.floor(px)*3.1+Math.floor(py)*7.7+Math.floor(angle*45)*13.9;const scaleMod=0.45;const dropletCount=Math.floor(Math.min(40,speed*(2+hash21(seed,0.77)*2)));if(dropletCount<3)return;const r=Math.round(inkR*255),g=Math.round(inkG*255),b=Math.round(inkB*255);for(let i=0;i<dropletCount;i++){const n1=hash21(seed+i*2.4,i*0.73)-0.5,n2=hash21(seed+i*2.4+1000,i*1.1)-0.5;const gaussNoise=(n1+n2)*1.4;const satAngle=angle+gaussNoise*0.25;const satVelocity=(speed*0.4)+(hash21(seed+1.3,i)*speed*0.5);const vx=Math.cos(satAngle)*satVelocity*scaleMod,vy=Math.sin(satAngle)*satVelocity*scaleMod;const refSize=Math.min(140,speed*10)*scaleMod;const sRadius=Math.max(0.4,hash21(seed+2.6,i)*refSize*0.08);splatParticles.push(new SplatParticle(px,py,vx,vy,sRadius,r,g,b,seed+i))}brush.w=Math.max(0,brush.w-brush.w*0.06);brush.p=Math.max(0,brush.p-brush.p*0.06);updateFills()}
 
 let strokePts=[];
 function maybeFlick(){if(strokePts.length<3)return;const last=strokePts[strokePts.length-1];const prev=strokePts[Math.max(0,strokePts.length-8)];const dx=last.x-prev.x,dy=last.y-prev.y;const dt=(last.t-prev.t)||1;const spd=Math.hypot(dx,dy)/dt*15;const ang=Math.atan2(dy,dx);if(spd>24){triggerKineticSplatter(last.x,last.y,ang,spd)}}
 
 // ═══ DRAWING ═══
 let drawing=false,lastGX=0,lastGY=0,lastTime=0,strokeSeed=0;
-function getPressure(e){if(e.pressure>0&&e.pressure!==0.5)return e.pressure;if(e.width&&e.width>1)return Math.min(1,Math.max(0.08,(e.width-8)/42));return 0.5}
+function getPressure(e){if(e.pressure>0&&e.pressure!==1)return e.pressure;if(e.width&&e.width>1)return Math.min(1,Math.max(0.08,(e.width-8)/42));return 0.5}
+const BRUSH_RANGES={3:[1,4],8:[4,12],20:[12,30]};
+let brushRange=BRUSH_RANGES[3];
+function getLiveRadius(e){const contact=Math.max(e.width||0,e.height||0);document.getElementById('build').textContent='SUMI_v3 · C:'+contact.toFixed(0)+' R:'+brushRadius.toFixed(1);if(contact>20){const t=Math.min(1,Math.max(0,(contact-30)/130));return brushRange[0]+t*(brushRange[1]-brushRange[0])}return brushRange[0]+0.3*(brushRange[1]-brushRange[0])}
 
-canvas.addEventListener('pointerdown',e=>{e.preventDefault();canvas.setPointerCapture(e.pointerId);const[gx,gy]=clientToGrid(e.clientX,e.clientY);drawing=true;lastGX=gx;lastGY=gy;lastTime=performance.now();strokeSeed=performance.now()%1000;strokePts=[{x:gx,y:gy,t:performance.now()}];if(brushStyle==='smudge'){smudgeBuf.r=0;smudgeBuf.g=0;smudgeBuf.b=0;smudgeBuf.amt=0;smudgeDab(gx,gy,getPressure(e))}else{addDeposit(gx,gy,getPressure(e),0,0)}});
-canvas.addEventListener('pointermove',e=>{if(!drawing)return;const[gx,gy]=clientToGrid(e.clientX,e.clientY);const now=performance.now();drawSegment(lastGX,lastGY,gx,gy,getPressure(e));strokePts.push({x:gx,y:gy,t:now});if(strokePts.length>12)strokePts.shift();lastGX=gx;lastGY=gy;lastTime=now});
+canvas.addEventListener('pointerdown',e=>{e.preventDefault();canvas.setPointerCapture(e.pointerId);const[gx,gy]=clientToGrid(e.clientX,e.clientY);drawing=true;lastGX=gx;lastGY=gy;lastTime=performance.now();strokeSeed=performance.now()%1000;strokePts=[{x:gx,y:gy,t:performance.now()}];brushRadius=getLiveRadius(e);if(brushStyle==='smudge'){smudgeBuf.r=0;smudgeBuf.g=0;smudgeBuf.b=0;smudgeBuf.amt=0;smudgeDab(gx,gy,getPressure(e))}else{addDeposit(gx,gy,getPressure(e),0,0)}});
+canvas.addEventListener('pointermove',e=>{if(!drawing)return;const[gx,gy]=clientToGrid(e.clientX,e.clientY);const now=performance.now();brushRadius=getLiveRadius(e);drawSegment(lastGX,lastGY,gx,gy,getPressure(e));strokePts.push({x:gx,y:gy,t:now});if(strokePts.length>12)strokePts.shift();lastGX=gx;lastGY=gy;lastTime=now});
 canvas.addEventListener('pointerup',e=>{if(drawing&&brushStyle!=='smudge')maybeFlick();drawing=false;strokePts=[];try{canvas.releasePointerCapture(e.pointerId)}catch(_){}});
 canvas.addEventListener('pointercancel',()=>{drawing=false});
 
