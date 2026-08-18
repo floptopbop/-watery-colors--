@@ -174,7 +174,7 @@ const CELL=1;
 const WATER_CAP=1.0,PIGMENT_CAP=1.98;
 const BRUSH_RAD=4.0,BRUSH_W_CAP=50000,BRUSH_P_CAP=40000,DEP_W=0.0015,DEP_P=0.0015;
 const INK_DARK=12.0,PAP_R=236,PAP_G=229,PAP_B=210;
-const SPREAD_RATE=0.2,EVAP_RATE=0.08,EDGE_EVAP_MULT=0.6,FIX_RATE=0.12,HINDRANCE=0.55;
+const SPREAD_RATE=0.2,EVAP_RATE=0.1,EDGE_EVAP_MULT=0.6,FIX_RATE=0.12,HINDRANCE=0.55;
 const SIGMA_BASE=0.08,SIGMA_PIN=0.30,SIGMA_GRAIN=0.12;
 const K_BASE=0.04,K_GRAIN=0.42,K_PIG=0.28,K_PIN=0.18;
 
@@ -188,10 +188,11 @@ const water=new Float32Array(N),mPig=new Float32Array(N),mR=new Float32Array(N),
 const fPig=new Float32Array(N),fR=new Float32Array(N),fG=new Float32Array(N),fB=new Float32Array(N);
 const tex=new Float32Array(N),absorb=new Float32Array(N),pinTex=new Float32Array(N);
 const wDelta=new Float32Array(N),pDelta=new Float32Array(N);
+const pRDelta=new Float32Array(N),pGDelta=new Float32Array(N),pBDelta=new Float32Array(N);
 const paperPixels=new Uint8ClampedArray(W_PX*H_PX*4);
 const imgData=ctx.createImageData(W_PX,H_PX);
 
-const brush={w:BRUSH_W_CAP*40,p:BRUSH_P_CAP*0.8};
+const brush={w:BRUSH_W_CAP*60,p:BRUSH_P_CAP*0.5};
 let brushRadius=1,inkR=0.05,inkG=0.04,inkB=0.035,brushStyle='round';
 let dirtyX0=NX,dirtyY0=NY,dirtyX1=0,dirtyY1=0,hasWet=false;
 
@@ -213,7 +214,7 @@ function clientToGrid(cx,cy){const r=canvas.getBoundingClientRect();return[(cx-r
 function addDeposit(gx,gy,pressure,orientation,speed){
   if(brush.w<=0&&brush.p<=0)return;
   pressure=Math.max(0.05,Math.min(1,pressure));
-  const baseRad=BRUSH_RAD*(brushRadius/16);
+  const baseRad=BRUSH_RAD*(brushRadius/8);
   let a,b,orientOff=0;
   switch(brushStyle){
     case'point':const pCube=pressure*pressure*pressure;a=baseRad*(0.1+pCube*1.4);b=a*(0.2+pCube*0.7);break;
@@ -232,22 +233,23 @@ function addDeposit(gx,gy,pressure,orientation,speed){
   reqP*=0.25+0.75*wFrac;reqW=Math.min(reqW,brush.w);reqP=Math.min(reqP,brush.p);
   if(reqW<1e-9&&reqP<1e-9)return;
   const skipThresh=dryness*dryness*0.55+Math.min(0.18,speed*0.005);
-  const grainAmp=0.10+0.65*dryness;
+ const grainAmp=0.06+0.20*dryness;
   let totalWt=0;const samples=[];
   for(let dy=-search;dy<=search;dy++)for(let dx=-search;dx<=search;dx++){
     const px=x0+dx,py=y0+dy;if(px<0||px>=NX||py<0||py>=NY)continue;
     const fx=px-gx,fy=py-gy,u=fx*cosT+fy*sinT,v=-fx*sinT+fy*cosT;
     const norm=(u/Math.max(0.3,a))**2+(v/Math.max(0.3,b))**2;if(norm>9)continue;
     let wt=Math.exp(-0.5*norm);
-    if(brushStyle==='rake'){const rakeFreq=Math.min(0.6,1.0/Math.max(0.5,baseRad*0.15));wt*=Math.max(0,Math.cos(v*rakeFreq*Math.PI))*(hash21(px*4.3,py*2.7+strokeSeed)>0.15?1:0)}
+    if(brushStyle==='rake'){const rakeFreq=Math.min(0.6,1.0/Math.max(0.5,baseRad*0.15));wt*=Math.max(0,Math.cos(v*rakeFreq*Math.PI))*(hash21(px*6.2,py*2.7+strokeSeed)>0.15?1:0)}
     if(brushStyle==='point')wt*=wt*wt;
     const bristleFreq=brushStyle==='rake'?0:Math.min(0.7,1.5/Math.max(1.0,baseRad*0.4));
-    if(bristleFreq>0){const bristleAmp=(0.05+0.65*dryness)*(brushStyle==='side'?0.3:1);const bristlePhase=hash21(gx*0.13+strokeSeed,gy*0.29)*Math.PI*2;wt*=(1-bristleAmp)+bristleAmp*Math.cos(v*bristleFreq*Math.PI+bristlePhase)}
+    if(bristleFreq>0){const bristleAmp=(0.05+0.65*dryness)*(brushStyle==='side'?0.3:1);const bristlePhase=hash21(gx*0.13+strokeSeed,gy*0.29)*Math.PI*2;wt*=Math.max(0.3,(1-bristleAmp)+bristleAmp*Math.cos(v*bristleFreq*Math.PI+bristlePhase))
+}
     const grain=tex[py*NX+px];wt*=(1-grainAmp)+grainAmp*grain;
     const catchNoise=hash21(px*3.17+strokeSeed*0.43,py*5.31-strokeSeed*1.7);
     const catchThresh=0.22*dryness*dryness+0.04;
-    if(catchNoise<catchThresh){wt=catchNoise<catchThresh*0.35?0:wt*(1.8+hash21(px*11.3,py*7.9)*2.0)}
-    const microGap=hash21(px*17.31+strokeSeed*2.1,py*13.71-strokeSeed);if(microGap<0.04*dryness)wt=0;
+    if(catchNoise<catchThresh){wt=0}
+
     if(skipThresh>0.015){const lane=Math.round(v/Math.max(1.5,b*0.4));const laneNoise=hash21(lane*7.13+strokeSeed,lane*3.71-strokeSeed*0.7);if(laneNoise<skipThresh)wt=0;else if(laneNoise<skipThresh*1.4)wt*=0.3}
     if(norm>1.2){const edgeSteep=1+2.8*dryness;const edgeJitter=1+hash21(px*9.1+strokeSeed,py*4.3)*0.6*dryness;wt*=Math.pow(Math.max(0,1-norm/(9*edgeJitter)),edgeSteep)}
 
@@ -273,17 +275,379 @@ function smudgeDab(gx,gy,pressure){const baseRad=BRUSH_RAD*(brushRadius/16);cons
 function drawSegment(x0,y0,x1,y1,pressure){const dx=x1-x0,dy=y1-y0,dist=Math.hypot(dx,dy);if(dist<0.001)return;const orient=Math.atan2(dy,dx);const steps=Math.max(1,Math.ceil(dist/1.5));for(let i=1;i<=steps;i++){const t=i/steps;if(brushStyle==='smudge')smudgeDab(x0+dx*t,y0+dy*t,pressure);else addDeposit(x0+dx*t,y0+dy*t,pressure,orient,dist)}}
 
 function simulateStep(){
-  if(!hasWet)return;const margin=2;const sx0=Math.max(1,dirtyX0-margin),sy0=Math.max(1,dirtyY0-margin),sx1=Math.min(NX-2,dirtyX1+margin),sy1=Math.min(NY-2,dirtyY1+margin);
-  for(let y=sy0;y<=sy1;y++){const row=y*NX;for(let x=sx0;x<=sx1;x++){wDelta[row+x]=0;pDelta[row+x]=0}}
-  for(let y=sy0;y<=sy1;y++)for(let x=sx0;x<=sx1;x++){const i=y*NX+x;const w=water[i];if(w<0.001)continue;const kSrc=K_BASE+K_GRAIN*tex[i]+K_PIG*Math.min(1,fPig[i]/PIGMENT_CAP)+K_PIN*pinTex[i];const pigConc=mPig[i]/(w+0.001);const nb=[i-1,i+1,i-NX,i+NX];for(let n=0;n<4;n++){const j=nb[n];if(water[j]<0.001){const sigma=SIGMA_BASE+SIGMA_PIN*pinTex[j]+SIGMA_GRAIN*tex[j];if(w<sigma)continue}const diff=w-water[j];if(diff<=0)continue;const kDst=K_BASE+K_GRAIN*tex[j]+K_PIG*Math.min(1,fPig[j]/PIGMENT_CAP)+K_PIN*pinTex[j];const kAvg=(kSrc+kDst)*0.5;let flow=SPREAD_RATE*diff*(1-kAvg);flow=Math.min(flow,w*0.12);wDelta[i]-=flow;wDelta[j]+=flow;const hind=HINDRANCE*tex[i];let pigFlow=flow*pigConc*(1-hind);pigFlow=Math.min(pigFlow,mPig[i]*0.12);if(pigFlow>0.0001){pDelta[i]-=pigFlow;pDelta[j]+=pigFlow}}}
-  for(let y=sy0;y<=sy1;y++)for(let x=sx0;x<=sx1;x++){const i=y*NX+x;if(wDelta[i]!==0)water[i]=Math.max(0,water[i]+wDelta[i]);if(pDelta[i]!==0)mPig[i]=Math.max(0,mPig[i]+pDelta[i])}
-  let stillWet=false;let newX0=NX,newY0=NY,newX1=0,newY1=0;
-  for(let y=sy0;y<=sy1;y++)for(let x=sx0;x<=sx1;x++){const i=y*NX+x;const w=water[i];if(w<0.001&&mPig[i]<0.001)continue;if(w>0.001){stillWet=true;if(x<newX0)newX0=x;if(y<newY0)newY0=y;if(x>newX1)newX1=x;if(y>newY1)newY1=y;let wetN=0;if(water[i-1]>0.01)wetN++;if(water[i+1]>0.01)wetN++;if(water[i-NX]>0.01)wetN++;if(water[i+NX]>0.01)wetN++;const edgeFac=1+(4-wetN)*EDGE_EVAP_MULT;water[i]=Math.max(0,w-EVAP_RATE*w*edgeFac);const dry=1-water[i]/WATER_CAP;const fix=FIX_RATE*dry*dry*absorb[i];const pRoom=Math.max(0,PIGMENT_CAP-fPig[i]);const amount=Math.min(mPig[i]*fix,pRoom);if(amount>0.0001){const existing=fPig[i];const total=existing+amount;const ew=existing/total,nw=amount/total;const bR=fR[i]*ew+mR[i]*nw,bG=fG[i]*ew+mG[i]*nw,bB=fB[i]*ew+mB[i]*nw;fR[i]=bR;fG[i]=bG;fB[i]=bB;fPig[i]=total;mPig[i]-=amount}}
+  if(!hasWet)return;
 
-    if(water[i]<0.005&&mPig[i]>0.001){const lockAmt=Math.min(mPig[i],Math.max(0,PIGMENT_CAP-fPig[i]));if(lockAmt>0){const ex=fPig[i],tot=ex+lockAmt;if(tot>0){const ew=ex/tot,nw=lockAmt/tot;const bR=fR[i]*ew+mR[i]*nw,bG=fG[i]*ew+mG[i]*nw,bB=fB[i]*ew+mB[i]*nw;fR[i]=ex>0.001?Math.min(fR[i],bR):bR;fG[i]=ex>0.001?Math.min(fG[i],bG):bG;fB[i]=ex>0.001?Math.min(fB[i],bB):bB;fPig[i]=tot}}mPig[i]=0;water[i]=0}}
-  if(stillWet){dirtyX0=Math.max(0,newX0-2);dirtyY0=Math.max(0,newY0-2);dirtyX1=Math.min(NX-1,newX1+2);dirtyY1=Math.min(NY-1,newY1+2)}else{hasWet=false;dirtyX0=NX;dirtyY0=NY;dirtyX1=0;dirtyY1=0}
+  const margin=2;
+  const sx0=Math.max(1,dirtyX0-margin);
+  const sy0=Math.max(1,dirtyY0-margin);
+  const sx1=Math.min(NX-2,dirtyX1+margin);
+  const sy1=Math.min(NY-2,dirtyY1+margin);
+
+  // Clear transport buffers
+  for(let y=sy0;y<=sy1;y++){
+    const row=y*NX;
+    for(let x=sx0;x<=sx1;x++){
+      const i=row+x;
+      wDelta[i]=0;
+      pDelta[i]=0;
+      pRDelta[i]=0;
+      pGDelta[i]=0;
+      pBDelta[i]=0;
+    }
+  }
+
+  // WATER + MOBILE PIGMENT TRANSPORT
+  for(let y=sy0;y<=sy1;y++){
+    for(let x=sx0;x<=sx1;x++){
+
+      const i=y*NX+x;
+      const w=water[i];
+
+      if(w<0.001)continue;
+
+      const kSrc=
+        K_BASE+
+        K_GRAIN*tex[i]+
+        K_PIG*Math.min(1,fPig[i]/PIGMENT_CAP)+
+        K_PIN*pinTex[i];
+
+      const pigConc=mPig[i]/(w+0.001);
+
+      const nb=[
+        i-1,
+        i+1,
+        i-NX,
+        i+NX
+      ];
+
+      for(let n=0;n<4;n++){
+
+        const j=nb[n];
+
+        if(water[j]<0.001){
+          const sigma=
+            SIGMA_BASE+
+            SIGMA_PIN*pinTex[j]+
+            SIGMA_GRAIN*tex[j];
+
+          if(w<sigma)continue;
+        }
+
+        const diff=w-water[j];
+
+        if(diff<=0)continue;
+
+        const kDst=
+          K_BASE+
+          K_GRAIN*tex[j]+
+          K_PIG*Math.min(1,fPig[j]/PIGMENT_CAP)+
+          K_PIN*pinTex[j];
+
+        const kAvg=(kSrc+kDst)*0.5;
+
+        let flow=
+          SPREAD_RATE*
+          diff*
+          (1-kAvg);
+
+        flow=Math.min(flow,w*0.12);
+
+        if(flow<=0)continue;
+
+        // WATER MOVEMENT
+        wDelta[i]-=flow;
+        wDelta[j]+=flow;
+
+        // PIGMENT MOVEMENT
+        let pigFlow=
+          flow*
+          pigConc*
+          (1-HINDRANCE*tex[i]);
+
+        pigFlow=Math.min(
+          pigFlow,
+          mPig[i]*0.12
+        );
+
+        if(pigFlow<=0.0001)continue;
+
+        pDelta[i]-=pigFlow;
+        pDelta[j]+=pigFlow;
+
+        // IMPORTANT:
+        // Move the actual pigment color with the pigment.
+        //
+        // mR/mG/mB are normalized pigment colors,
+        // so pigment mass * color gives the transported
+        // amount of each color channel.
+        const tr=pigFlow*mR[i];
+        const tg=pigFlow*mG[i];
+        const tb=pigFlow*mB[i];
+
+        pRDelta[i]-=tr;
+        pGDelta[i]-=tg;
+        pBDelta[i]-=tb;
+
+        pRDelta[j]+=tr;
+        pGDelta[j]+=tg;
+        pBDelta[j]+=tb;
+      }
+    }
+  }
+
+  // APPLY WATER + PIGMENT TRANSPORT
+  for(let y=sy0;y<=sy1;y++){
+    for(let x=sx0;x<=sx1;x++){
+
+      const i=y*NX+x;
+
+      const oldPig=mPig[i];
+      const oldR=oldPig*mR[i];
+      const oldG=oldPig*mG[i];
+      const oldB=oldPig*mB[i];
+
+      const newPig=Math.max(
+        0,
+        oldPig+pDelta[i]
+      );
+
+      water[i]=Math.max(
+        0,
+        water[i]+wDelta[i]
+      );
+
+      if(newPig>0.000001){
+
+        // Reconstruct pigment color from transported
+        // pigment mass rather than leaving new cells black.
+        const newR=Math.max(
+          0,
+          oldR+pRDelta[i]
+        );
+
+        const newG=Math.max(
+          0,
+          oldG+pGDelta[i]
+        );
+
+        const newB=Math.max(
+          0,
+          oldB+pBDelta[i]
+        );
+
+        mPig[i]=newPig;
+
+        mR[i]=Math.min(
+          1,
+          Math.max(0,newR/newPig)
+        );
+
+        mG[i]=Math.min(
+          1,
+          Math.max(0,newG/newPig)
+        );
+
+        mB[i]=Math.min(
+          1,
+          Math.max(0,newB/newPig)
+        );
+
+      }else{
+
+        mPig[i]=0;
+        mR[i]=0;
+        mG[i]=0;
+        mB[i]=0;
+      }
+    }
+  }
+
+  // DRYING / FIXATION / EVAPORATION
+  let stillWet=false;
+  let newX0=NX,newY0=NY;
+  let newX1=0,newY1=0;
+
+  for(let y=sy0;y<=sy1;y++){
+    for(let x=sx0;x<=sx1;x++){
+
+      const i=y*NX+x;
+      const w=water[i];
+
+      if(w<0.001&&mPig[i]<0.001)continue;
+
+      if(w>0.001){
+
+        stillWet=true;
+
+        if(x<newX0)newX0=x;
+        if(y<newY0)newY0=y;
+        if(x>newX1)newX1=x;
+        if(y>newY1)newY1=y;
+
+        let wetN=0;
+
+        if(water[i-1]>0.01)wetN++;
+        if(water[i+1]>0.01)wetN++;
+        if(water[i-NX]>0.01)wetN++;
+        if(water[i+NX]>0.01)wetN++;
+
+        const edgeFac=
+          1+
+          (4-wetN)*
+          EDGE_EVAP_MULT;
+
+        water[i]=Math.max(
+          0,
+          w-EVAP_RATE*w*edgeFac
+        );
+
+        const dry=
+          1-
+          water[i]/WATER_CAP;
+
+        const fix=
+          FIX_RATE*
+          dry*
+          dry*
+          absorb[i];
+
+        const pRoom=
+          Math.max(
+            0,
+            PIGMENT_CAP-fPig[i]
+          );
+
+        const amount=Math.min(
+          mPig[i]*fix,
+          pRoom
+        );
+
+        if(amount>0.0001){
+
+          const existing=fPig[i];
+          const total=existing+amount;
+
+          const ew=existing/total;
+          const nw=amount/total;
+
+          const bR=
+            fR[i]*ew+
+            mR[i]*nw;
+
+          const bG=
+            fG[i]*ew+
+            mG[i]*nw;
+
+          const bB=
+            fB[i]*ew+
+            mB[i]*nw;
+
+          fR[i]=bR;
+          fG[i]=bG;
+          fB[i]=bB;
+
+          fPig[i]=total;
+          mPig[i]-=amount;
+        }
+      }
+
+      // FINAL PIGMENT LOCK
+      if(
+        water[i]<0.005&&
+        mPig[i]>0.001
+      ){
+
+        const lockAmt=Math.min(
+          mPig[i],
+          Math.max(
+            0,
+            PIGMENT_CAP-fPig[i]
+          )
+        );
+
+        if(lockAmt>0){
+
+          const ex=fPig[i];
+          const tot=ex+lockAmt;
+
+          if(tot>0){
+
+            const ew=ex/tot;
+            const nw=lockAmt/tot;
+
+            const bR=
+              fR[i]*ew+
+              mR[i]*nw;
+
+            const bG=
+              fG[i]*ew+
+              mG[i]*nw;
+
+            const bB=
+              fB[i]*ew+
+              mB[i]*nw;
+
+            fR[i]=
+              ex>0.001?
+              Math.min(fR[i],bR):
+              bR;
+
+            fG[i]=
+              ex>0.001?
+              Math.min(fG[i],bG):
+              bG;
+
+            fB[i]=
+              ex>0.001?
+              Math.min(fB[i],bB):
+              bB;
+
+            fPig[i]=tot;
+          }
+        }
+
+        mPig[i]=0;
+        mR[i]=0;
+        mG[i]=0;
+        mB[i]=0;
+
+        water[i]=0;
+      }
+    }
+  }
+
+  if(stillWet){
+
+    dirtyX0=Math.max(
+      0,
+      newX0-2
+    );
+
+    dirtyY0=Math.max(
+      0,
+      newY0-2
+    );
+
+    dirtyX1=Math.min(
+      NX-1,
+      newX1+2
+    );
+
+    dirtyY1=Math.min(
+      NY-1,
+      newY1+2
+    );
+
+  }else{
+
+    hasWet=false;
+
+    dirtyX0=NX;
+    dirtyY0=NY;
+    dirtyX1=0;
+    dirtyY1=0;
+  }
 }
-
 function render(){const px=imgData.data;px.set(paperPixels);for(let i=0;i<N;i++){const fp=fPig[i],mp=mPig[i],w=water[i];if(fp<0.003&&mp<0.003&&w<0.01)continue;const pi=i*4;let r=px[pi],g=px[pi+1],b=px[pi+2];if(fp>0.003){const fDark=1-Math.exp(-fp*INK_DARK);r=r*(1-fDark)+fR[i]*255*fDark;g=g*(1-fDark)+fG[i]*255*fDark;b=b*(1-fDark)+fB[i]*255*fDark}if(mp>0.003){const mDark=Math.min(1,mp*0.5);r=r*(1-mDark)+mR[i]*255*mDark;g=g*(1-mDark)+mG[i]*255*mDark;b=b*(1-mDark)+mB[i]*255*mDark}if(w>0.02){const sheen=Math.min(0.12,w*0.08);r=Math.min(255,r*(1+sheen)+sheen*6);g=Math.min(255,g*(1+sheen)+sheen*8);b=Math.min(255,b*(1+sheen)+sheen*14)}px[pi]=r|0;px[pi+1]=g|0;px[pi+2]=b|0}ctx.putImageData(imgData,0,0)}
 
 // ═══ TRAY UI ═══
