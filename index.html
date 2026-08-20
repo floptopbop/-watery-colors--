@@ -733,7 +733,7 @@ function maybeFlick(){if(strokePts.length<3)return;const last=strokePts[strokePt
 // ═══ DRAWING ═══
 let drawing=false,lastGX=0,lastGY=0,lastTime=0,strokeSeed=0;
 function getPressure(e){if(e.pressure>0&&e.pressure!==1)return e.pressure;if(e.width&&e.width>1)return Math.min(1,Math.max(0.08,(e.width-8)/42));return 0.5}
-const BRUSH_RANGES={3:[1,4],8:[4,12],20:[12,30]};
+const BRUSH_RANGES={3:[.25,10],8:[10,20],20:[20,40]};
 let brushRange=BRUSH_RANGES[3];
 function getLiveRadius(e){const contact=Math.max(e.width||0,e.height||0);document.getElementById('build').textContent='SUMI_v3 · C:'+contact.toFixed(0)+' R:'+brushRadius.toFixed(1);if(contact>20){const t=Math.min(1,Math.max(0,(contact-30)/130));return brushRange[0]+t*(brushRange[1]-brushRange[0])}return brushRange[0]+0.3*(brushRange[1]-brushRange[0])}
 
