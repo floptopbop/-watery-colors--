@@ -192,7 +192,7 @@ const pRDelta=new Float32Array(N),pGDelta=new Float32Array(N),pBDelta=new Float3
 const paperPixels=new Uint8ClampedArray(W_PX*H_PX*4);
 const imgData=ctx.createImageData(W_PX,H_PX);
 
-const brush={w:BRUSH_W_CAP*60,p:BRUSH_P_CAP*0.5};
+const brush={w:BRUSH_W_CAP*60,p:BRUSH_P_CAP*0.2};
 let brushRadius=1,inkR=0.05,inkG=0.04,inkB=0.035,brushStyle='round';
 let dirtyX0=NX,dirtyY0=NY,dirtyX1=0,dirtyY1=0,hasWet=false;
 
@@ -222,7 +222,7 @@ function addDeposit(gx,gy,pressure,orientation,speed){
     case'rake':a=baseRad*(0.7+pressure*1.0);b=a*(0.8+pressure*0.15);break;
     default:a=baseRad*(0.55+pressure*0.85);b=a*(0.6+pressure*0.3)}
   const stampHash=hash21(gx*0.37+strokeSeed,gy*0.53-strokeSeed*0.2);
-  const catchJitter=1.0+0.40*(stampHash-0.5);
+  const catchJitter=1.0+0.3519*(stampHash-0.74);
   a*=catchJitter;b*=catchJitter*(1+0.15*(hash21(gx*1.1,gy*0.7+strokeSeed)-0.5));
   const search=Math.ceil(Math.max(a,b)*3)+2;
   const x0=Math.floor(gx),y0=Math.floor(gy);
