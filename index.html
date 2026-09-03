@@ -102,10 +102,48 @@ canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
   color:rgba(87,242,161,0.45);font-size:16px;line-height:1;
   touch-action:none;cursor:pointer;transition:transform 0.2s}
 #palToggle.flipped{transform:scaleX(-1)}
+
+#aiThought{
+  position:fixed;top:0;left:0;right:0;
+  padding:10px 16px 11px;
+  background:rgba(7,11,18,0.82);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  border-bottom:1px solid rgba(87,242,161,0.10);
+  font-size:10px;line-height:1.55;letter-spacing:0.06em;
+  color:rgba(236,229,210,0.55);
+  z-index:30;pointer-events:none;
+  opacity:0;transition:opacity 0.7s ease;
+  font-family:'IBM Plex Mono','Share Tech Mono',monospace;
+  white-space:pre-wrap;
+}
+#aiThought.visible{opacity:1}
+#aiThought .ai-label{
+  font-size:7.5px;letter-spacing:0.2em;color:rgba(87,242,161,0.4);
+  margin-bottom:4px;display:block;
+}
+#aiBtn{
+  width:36px;height:36px;border-radius:6px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  border:2px solid rgba(87,242,161,0.35);background:rgba(7,11,18,0.4);
+  color:rgba(87,242,161,0.6);font-size:11px;letter-spacing:0.05em;
+  transition:transform 0.16s,border-color 0.3s,background 0.3s;touch-action:none;cursor:pointer;
+  font-family:'IBM Plex Mono',monospace;
+}
+#aiBtn:active{transform:scale(0.88)}
+#aiBtn.thinking{
+  border-color:rgba(87,242,161,0.8);
+  background:rgba(87,242,161,0.08);
+  animation:aipulse 1.2s ease-in-out infinite;
+}
+#aiBtn.painting{
+  border-color:rgba(200,180,160,0.7);
+  background:rgba(200,180,160,0.08);
+}
+@keyframes aipulse{0%,100%{opacity:1}50%{opacity:0.45}}
 </style>
 </head>
 <body>
 <canvas id="canvas"></canvas>
+<div id="aiThought"><span class="ai-label">墨 AI · THOUGHT</span><span id="aiThoughtText"></span></div>
 <div id="build">SUMI_v3</div>
 <div id="bstate">
   <div><div class="bbar" id="barW"><div class="fill"></div></div><div class="bbar-label">W</div></div>
@@ -124,7 +162,7 @@ canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
         <div class="swatch" style="background:#2C8CEC" data-r="0.17" data-g="0.54" data-b="0.93"></div>
         <div class="swatch" style="background:#8B45B0" data-r="0.55" data-g="0.27" data-b="0.69"></div>
         <div class="swatch" style="background:#E87830" data-r="0.91" data-g="0.47" data-b="0.19"></div>
-        <div class="swatch" style="background:#C8A84E" data-r="0.78" data-g="0.66" data-b="0.31"></div>
+        <div class="swatch" style="background:#F8A7F7" data-r="0.97" data-g="0.65" data-b="0.97"></div>
         <div class="swatch" style="background:#A8A8B0" data-r="0.66" data-g="0.66" data-b="0.69"></div>
       </div>
       <div class="palPage" data-pal="earth">
@@ -143,6 +181,7 @@ canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
     <div class="rowDiv"></div>
     <div id="resetBtn">↺</div>
     <div id="jsonBtn" title="Load JSON">⊕</div>
+    <div id="aiBtn" title="AI painter">墨AI</div>
   </div>
   <div id="brushRow">
     <div class="bstyle active" data-style="round" title="Round">丸</div>
@@ -231,7 +270,7 @@ function addDeposit(gx,gy,pressure,orientation,speed){
     default:a=baseRad*(0.6+pressure*0.7);b=a*(0.85+pressure*0.1)}
   const stampHash=hash21(gx*0.37+strokeSeed,gy*0.53-strokeSeed*0.2);
   const catchJitter=1.0+0.40*(stampHash-0.5);
-  a*=catchJitter;b*=catchJitter*(1+0.15*(hash21(gx*1.1,gy*0.7+strokeSeed)-0.5));
+  a*=catchJitter;b*=catchJitter*(1+0.15*(hash21(gx*1.1,gy*0.7+pressure)-0.5));
   const search=Math.ceil(Math.max(a,b)*3)+2;
   const x0=Math.floor(gx),y0=Math.floor(gy);
   const theta=orientation+orientOff,cosT=Math.cos(theta),sinT=Math.sin(theta);
@@ -272,7 +311,7 @@ function addDeposit(gx,gy,pressure,orientation,speed){
   expandDirty(x0-search,y0-search,x0+search,y0+search);
 }
 
-const smudgeBuf={r:0,g:0,b:0,amt:0};const SMUDGE_PICKUP=0.25,SMUDGE_DEPOSIT=0.35,SMUDGE_DECAY=0.92;
+const smudgeBuf={r:0,g:0,b:0,amt:0};const SMUDGE_PICKUP=0.25,SMUDGE_DEPOSIT=0.45,SMUDGE_DECAY=0.98;
 function smudgeDab(gx,gy,pressure){const baseRad=BRUSH_RAD*(brushRadius/36);const rad=baseRad*(0.6+pressure*2);const search=Math.ceil(rad*5)+1;const x0=Math.floor(gx),y0=Math.floor(gy);let pickR=0,pickG=0,pickB=0,pickAmt=0,totalWt=0;const cells=[];for(let dy=-search;dy<=search;dy++)for(let dx=-search;dx<=search;dx++){const px=x0+dx,py=y0+dy;if(px<0||px>=NX||py<0||py>=NY)continue;const fx=px-gx,fy=py-gy,dist2=fx*fx+fy*fy,r2=rad*rad;if(dist2>r2*4)continue;const wt=Math.exp(-0.5*dist2/Math.max(0.5,r2));if(wt<0.01)continue;const idx=py*NX+px;cells.push({idx,wt});totalWt+=wt;const lift=fPig[idx]*SMUDGE_PICKUP*pressure*wt;if(lift>0.0001){pickR+=fR[idx]*lift;pickG+=fG[idx]*lift;pickB+=fB[idx]*lift;pickAmt+=lift;fPig[idx]=Math.max(0,fPig[idx]-lift)}}
   if(pickAmt>0.0001){const total=smudgeBuf.amt+pickAmt;const ew=smudgeBuf.amt/total,nw=pickAmt/total;smudgeBuf.r=smudgeBuf.r*ew+(pickR/pickAmt)*nw;smudgeBuf.g=smudgeBuf.g*ew+(pickG/pickAmt)*nw;smudgeBuf.b=smudgeBuf.b*ew+(pickB/pickAmt)*nw;smudgeBuf.amt=total}
   if(smudgeBuf.amt>0.001&&totalWt>0){const deposit=smudgeBuf.amt*SMUDGE_DEPOSIT;for(const c of cells){const frac=c.wt/totalWt;const pAdd=deposit*frac;if(pAdd<0.0001)continue;const existing=fPig[c.idx];const tot=existing+pAdd;const ew=existing/tot,nw=pAdd/tot;fR[c.idx]=fR[c.idx]*ew+smudgeBuf.r*nw;fG[c.idx]=fG[c.idx]*ew+smudgeBuf.g*nw;fB[c.idx]=fB[c.idx]*ew+smudgeBuf.b*nw;fPig[c.idx]=Math.min(PIGMENT_CAP,tot)}smudgeBuf.amt=Math.max(0,smudgeBuf.amt-deposit)}
@@ -439,7 +478,7 @@ let splatParticles=[];
 class SplatParticle{constructor(x,y,vx,vy,radius,r,g,b,id){this.x=x;this.y=y;this.vx=vx;this.vy=vy;this.radius=radius;this.r=r;this.g=g;this.b=b;this.id=id;this.alpha=0.85;this.friction=0.92;this.decay=0.002+hash21(id,9.4)*0.008;this.settled=false}
   update(){if(this.settled)return;this.x+=this.vx;this.y+=this.vy;this.vx*=this.friction;this.vy*=this.friction;this.alpha-=this.decay;if(this.alpha<=0.03||Math.hypot(this.vx,this.vy)<0.08){this.settled=true;const gx=Math.round(this.x),gy=Math.round(this.y);if(gx>=0&&gx<NX&&gy>=0&&gy<NY){const dropR=Math.ceil(this.radius);const str=Math.max(0.05,this.alpha*0.6);for(let dy=-dropR-1;dy<=dropR+1;dy++)for(let dx=-dropR-1;dx<=dropR+1;dx++){const px=gx+dx,py=gy+dy;if(px<0||px>=NX||py<0||py>=NY)continue;const d2=dx*dx+dy*dy;if(d2>this.radius*this.radius*4)continue;const wt=Math.exp(-d2/(this.radius*this.radius*0.8))*str;if(wt<0.005)continue;const idx=py*NX+px;water[idx]=Math.min(WATER_CAP,water[idx]+wt*0.3);const existing=mPig[idx];const pAdd=wt*0.4;const total=existing+pAdd;if(total>0){const ew=existing/total,nw=pAdd/total;mR[idx]=mR[idx]*ew+(this.r/255)*nw;mG[idx]=mG[idx]*ew+(this.g/255)*nw;mB[idx]=mB[idx]*ew+(this.b/255)*nw}mPig[idx]=total;expandDirty(px-1,py-1,px+1,py+1)}hasWet=true}}}}
 
-function triggerKineticSplatter(px,py,angle,speed){const seed=Math.floor(px)*3.1+Math.floor(py)*7.7+Math.floor(angle*45)*13.9;const scaleMod=0.45;const dropletCount=Math.floor(Math.min(40,speed*(2+hash21(seed,0.77)*2)));if(dropletCount<3)return;const r=Math.round(inkR*255),g=Math.round(inkG*255),b=Math.round(inkB*255);for(let i=0;i<dropletCount;i++){const n1=hash21(seed+i*2.4,i*0.73)-0.5,n2=hash21(seed+i*2.4+1000,i*1.1)-0.5;const gaussNoise=(n1+n2)*1.4;const satAngle=angle+gaussNoise*0.25;const satVelocity=(speed*0.4)+(hash21(seed+1.3,i)*speed*0.5);const vx=Math.cos(satAngle)*satVelocity*scaleMod,vy=Math.sin(satAngle)*satVelocity*scaleMod;const refSize=Math.min(140,speed*10)*scaleMod;const sRadius=Math.max(0.4,hash21(seed+2.6,i)*refSize*0.08);splatParticles.push(new SplatParticle(px,py,vx,vy,sRadius,r,g,b,seed+i))}brush.w=Math.max(0,brush.w-brush.w*0.06);brush.p=Math.max(0,brush.p-brush.p*0.06);updateFills()}
+function triggerKineticSplatter(px,py,angle,speed){const seed=Math.floor(px)*9+Math.floor(py)*7.7+Math.floor(angle*45)*13.9;const scaleMod=0.45;const dropletCount=Math.floor(Math.min(40,speed*(2+hash21(seed,0.77)*2)));if(dropletCount<3)return;const r=Math.round(inkR*255),g=Math.round(inkG*255),b=Math.round(inkB*255);for(let i=0;i<dropletCount;i++){const n1=hash21(seed+i*2.4,i*0.73)-0.5,n2=hash21(seed+i*2.4+1000,i*1.1)-0.5;const gaussNoise=(n1+n2)*1.4;const satAngle=angle+gaussNoise*0.25;const satVelocity=(speed*0.4)+(hash21(seed+1.3,i)*speed*0.5);const vx=Math.cos(satAngle)*satVelocity*scaleMod,vy=Math.sin(satAngle)*satVelocity*scaleMod;const refSize=Math.min(140,speed*10)*scaleMod;const sRadius=Math.max(0.4,hash21(seed+2.6,i)*refSize*0.08);splatParticles.push(new SplatParticle(px,py,vx,vy,sRadius,r,g,b,seed+i))}brush.w=Math.max(0,brush.w-brush.w*0.06);brush.p=Math.max(0,brush.p-brush.p*0.06);updateFills()}
 
 let strokePts=[];
 function maybeFlick(){if(strokePts.length<3)return;const last=strokePts[strokePts.length-1];const prev=strokePts[Math.max(0,strokePts.length-8)];const dx=last.x-prev.x,dy=last.y-prev.y;const dt=(last.t-prev.t)||1;const spd=Math.hypot(dx,dy)/dt*15;const ang=Math.atan2(dy,dx);if(spd>24){triggerKineticSplatter(last.x,last.y,ang,spd)}}
@@ -551,6 +590,116 @@ function importJsonLayer(jsonStr){let data;try{data=JSON.parse(jsonStr)}catch(e)
   brush.w=_brushW;brush.p=_brushP;inkR=_inkR;inkG=_inkG;inkB=_inkB;brushRadius=_brushRadius;brushStyle=_brushStyle;strokeSeed=_strokeSeed;updateFills()}
 
 (function buildJsonUI(){const btn=document.getElementById('jsonBtn');const fileIn=document.createElement('input');fileIn.type='file';fileIn.accept='.json,application/json';fileIn.style.display='none';fileIn.addEventListener('change',()=>{const f=fileIn.files[0];if(!f)return;const reader=new FileReader();reader.onload=e=>importJsonLayer(e.target.result);reader.readAsText(f);fileIn.value=''});btn.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();fileIn.click();keepOpen()});let pressT;btn.addEventListener('touchstart',()=>{pressT=setTimeout(()=>{const txt=prompt('Paste JSON layer:');if(txt)importJsonLayer(txt)},600)},{passive:true});btn.addEventListener('touchend',()=>clearTimeout(pressT),{passive:true});document.body.appendChild(fileIn)})();
+
+// ═══ AI PAINTER ═══
+(function setupAIPainter(){
+  const btn = document.getElementById('aiBtn');
+  const thoughtPanel = document.getElementById('aiThought');
+  const thoughtText = document.getElementById('aiThoughtText');
+  let busy = false;
+
+  function showThought(text) {
+    thoughtText.textContent = text;
+    thoughtPanel.classList.add('visible');
+  }
+  function hideThought() {
+    thoughtPanel.classList.remove('visible');
+  }
+
+  async function callClaude(messages, systemPrompt) {
+    const body = { model: 'claude-sonnet-4-6', max_tokens: 1000, messages };
+    if (systemPrompt) body.system = systemPrompt;
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    return data.content.map(b => b.text || '').join('');
+  }
+
+  async function runAIPainter() {
+    if (busy) return;
+    busy = true;
+    btn.classList.add('thinking');
+    btn.textContent = '…';
+    keepOpen();
+
+    try {
+      // Phase 1 — meditate: get a thought
+      const thoughtRaw = await callClaude([{
+        role: 'user',
+        content: 'You are about to paint with sumi-e ink on paper. Pause. What single thought, image, or feeling moves through you right now — the impulse that will guide your brush? One or two sentences, quiet and concrete. No preamble, no explanation.'
+      }]);
+      const thought = thoughtRaw.trim();
+      showThought(thought);
+
+      btn.classList.remove('thinking');
+      btn.classList.add('painting');
+      btn.textContent = '墨';
+
+      // Phase 2 — paint: get strokes inspired by that thought
+      const strokeSystem = `You control a sumi-e ink simulation. Output ONLY valid JSON — no markdown, no explanation.
+
+The JSON must have this shape:
+{
+  "paper": { "wetness": 0.0 },
+  "strokes": [ ... ]
+}
+
+Each stroke:
+{
+  "color": "#rrggbb",          // dark ink tones work best
+  "water": 0.0–1.0,
+  "pigment": 0.85–0.95,        // keep high for visible marks
+  "brush": 10–20,              // 10–14 for lines, 16–20 for washes
+  "style": "round"|"point"|"side"|"rake"|"smudge",
+  "pressure": 0.85–0.92,
+  "path": [[x,y], ...],        // normalized 0–1 coords, at least 2 points
+  "interpolation": "catmull",
+  "pause": 0–80,               // sim ticks for drying between strokes
+  "flick": false|true|number   // optional splatter at stroke end
+}
+
+Rules:
+- 4 to 12 strokes total
+- Vary brush styles, weights, rhythms
+- Leave negative space — restraint is strength
+- paper wetness 0.0–0.15 only
+- All pigment values 0.85–0.95
+- All water values 0.5–0.85
+- Paths stay within 0.05–0.95 range
+- Return ONLY the JSON object, nothing else`;
+
+      const strokesRaw = await callClaude([{
+        role: 'user',
+        content: `Your thought was: "${thought}"\n\nNow translate that into brush strokes. Return only the JSON.`
+      }], strokeSystem);
+
+      // Strip any accidental markdown fences
+      const clean = strokesRaw.replace(/```json|```/g, '').trim();
+      importJsonLayer(clean);
+
+    } catch(err) {
+      showThought('[ connection lost — the brush is still ]');
+      console.error('AI painter error:', err);
+    }
+
+    btn.classList.remove('thinking', 'painting');
+    btn.textContent = '墨AI';
+    busy = false;
+
+    // Hide thought after a while
+    setTimeout(hideThought, 12000);
+    schedClose(4000);
+  }
+
+  btn.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    runAIPainter();
+  });
+})();
 
 // ═══ ANIMATION ═══
 function animate(){simulateStep();tickHold(performance.now());
